@@ -1,6 +1,6 @@
 # ASL Translation - Deep CNN, Object Detection/Image Segmentation
 
-### Group Names: Kelsey, Sarah, Chris, Alex, Henry
+### Group Names: Kelsey, Sarah, Chris, Alex, Ben
 
 ### Group Emails: 2364453, 
 
