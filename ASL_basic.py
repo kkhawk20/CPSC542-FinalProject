@@ -136,8 +136,11 @@ print(f"Training F1: {f1_train:.4f}")
 print(f"Testing accuracy: {acc_test:.4f}")
 print(f"Testing F1: {f1_test:.4f}")
 
-# Visualize some predictions!
 
+
+
+
+# Visualize some predictions!
 # Predicting on test dataset
 test_pred = model.predict(x_test)
 test_pred_labels = np.argmax(test_pred, axis=1)
@@ -158,7 +161,7 @@ fig, axes = plt.subplots(nrows=1, ncols=num_images, figsize=(15, 15))
 
 for ax, idx in zip(axes.flat, random_indices):
     # Reshape the image for display
-    image = x_test.iloc[idx].values.reshape(28, 28)  # Reshape back to 28x28 for display
+    image = x_test[idx].reshape(28, 28)   
     ax.imshow(image, cmap='gray')
     ax.set_title(f'Actual: {mapped_true_labels[idx]}\nPredicted: {mapped_pred_labels[idx]}')
     ax.axis('off')
