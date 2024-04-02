@@ -19,12 +19,13 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
 from sklearn.metrics import make_scorer, accuracy_score, f1_score
 import matplotlib.pyplot as plt
+import os
 
+save_dir = os.path.join(os.path.dirname(__file__), 'outputs')
+data_dir = os.path.join(os.path.dirname(__file__), 'Data')
 
-
-
-train_df = pd.read_csv("/app/rundir/test_rundir/CPSC542-FinalProject/Data/sign_mnist_train/sign_mnist_train.csv")
-test_df = pd.read_csv("/app/rundir/test_rundir/CPSC542-FinalProject/Data/sign_mnist_test/sign_mnist_test.csv")
+train_df = pd.read_csv(os.path.join(data_dir, 'sign_mnist_train/sign_mnist_train.csv'))
+test_df = pd.read_csv(os.path.join(data_dir, 'sign_mnist_test/sign_mnist_test.csv'))
 
 # Separating X and Y
 y_train = train_df['label']
@@ -86,7 +87,7 @@ model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accur
 
 early = [kb.callbacks.EarlyStopping(monitor = 'val_loss', patience = 5)]
 
-history = model.fit(trainX, trainY, epochs = 100, validation_data=(testX, testY), callbacks = early)
+history = model.fit(x_train, trainY, epochs = 100, validation_data=(x_test, testY), callbacks = early)
 
 # Plot training & validation accuracy values
 plt.figure(figsize=(12, 6))
@@ -107,8 +108,7 @@ plt.ylabel('Loss')
 plt.xlabel('Epoch')
 plt.legend(['Train', 'Test'], loc='upper left')
 
-plt.savefig('app/rundir/test_rundir/CPSC542-FinalProject/Results/ASL_MNIST_DNN.png')
-
+plt.savefig(os.path.join(save_dir, 'ASL_MNIST_Loss_Accuracy.png'))
 
 # Evaluate the model
 key = {0:'a', 1:'b', 2: 'c', 3: 'd', 4: 'e', 5: 'f',
@@ -118,7 +118,7 @@ key = {0:'a', 1:'b', 2: 'c', 3: 'd', 4: 'e', 5: 'f',
        21: 'v', 22: 'w', 23: 'x', 24: 'y', 25: 'z'
        }
 
-train_pred = model.predict(trainX)
+train_pred = model.predict(x_train)
 train_pred_labels = np.argmax(train_pred, axis=1)
 
 # Calculate accuracy for the training set
@@ -126,7 +126,7 @@ acc_train = accuracy_score(y_train, train_pred_labels)
 f1_train = f1_score(y_train, train_pred_labels, average = 'micro')
 
 # For the testing set, do the prediction and then calculate accuracy
-test_pred = model.predict(testX)
+test_pred = model.predict(x_test)
 test_pred_labels = np.argmax(test_pred, axis=1)
 acc_test = accuracy_score(y_test, test_pred_labels)
 f1_test = f1_score(y_test, test_pred_labels, average = 'micro')
@@ -139,7 +139,7 @@ print(f"Testing F1: {f1_test:.4f}")
 # Visualize some predictions!
 
 # Predicting on test dataset
-test_pred = model.predict(testX)
+test_pred = model.predict(x_test)
 test_pred_labels = np.argmax(test_pred, axis=1)
 
 # Actual labels in numeric form
@@ -151,14 +151,14 @@ mapped_pred_labels = [key[label] for label in test_pred_labels]
 
 # Select a few random images from the test set to display
 num_images = 5
-random_indices = np.random.choice(testX.shape[0], num_images, replace=False)
+random_indices = np.random.choice(x_test.shape[0], num_images, replace=False)
 
 # Setup for a 1x5 grid
 fig, axes = plt.subplots(nrows=1, ncols=num_images, figsize=(15, 15))
 
 for ax, idx in zip(axes.flat, random_indices):
     # Reshape the image for display
-    image = testX.iloc[idx].values.reshape(28, 28)  # Reshape back to 28x28 for display
+    image = x_test.iloc[idx].values.reshape(28, 28)  # Reshape back to 28x28 for display
     ax.imshow(image, cmap='gray')
     ax.set_title(f'Actual: {mapped_true_labels[idx]}\nPredicted: {mapped_pred_labels[idx]}')
     ax.axis('off')
