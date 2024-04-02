@@ -168,4 +168,4 @@ for ax, idx in zip(axes.flat, random_indices):
 
 plt.tight_layout()
 plt.show()
-plt.savefig('app/rundir/test_rundir/CPSC542-FinalProject/Results/ASL_MNIST_Predictions.png')
+plt.savefig(os.path.join(save_dir, 'ASL_MNIST_Predictions.png'))
