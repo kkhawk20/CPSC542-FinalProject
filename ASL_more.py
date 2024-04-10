@@ -149,7 +149,6 @@ def train_val(model, params):
             print("Loading best model weights!")
             model.load_state_dict(best_model_wts)
         
-
         print("train loss: %.6f, dev loss: %.6f, accuracy: %.2f" %(train_loss,val_loss,100*val_metric))
         print("-"*10) 
     model.load_state_dict(best_model_wts)
@@ -216,8 +215,6 @@ def plot_loss(loss_hist, metric_hist):
     plt.xlabel("Training Epochs")
     plt.legend()
     plt.show()
-
-#%%
     
 from torch import nn
 class Resnt18Rnn(nn.Module):
