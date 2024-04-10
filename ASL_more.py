@@ -1,78 +1,81 @@
 import json
 import os
 import shutil
-
 import numpy as np
 import pandas as pd
 
-main_path = "/kaggle/input/wlasl-processed/"
+main_path = "/app/rundir/CPSC542-FinalProject/archive-3/"
 wlasl_df = pd.read_json(main_path + "WLASL_v0.3.json")
 
-wlasl_df.head()
+print(wlasl_df.head())
 
-def get_videos_ids(json_list):
-    """
-    check if the video id is available in the dataset
-    and return the viedos ids of the current instance
+# def get_videos_ids(json_list):
+#     """
+#     check if the video id is available in the dataset
+#     and return the viedos ids of the current instance
     
-    Args:
-        json_list: Instance of video metadata.
+#     Args:
+#         json_list: Instance of video metadata.
         
-    Returns:
-        List of video ids. 
-    """
-    video_ids = []
-    for ins in json_list:
-        video_id = ins['video_id']
-        if os.path.exists(f'{main_path}videos/{video_id}.mp4'):
-            video_ids.append(video_id)
-    return video_ids
+#     Returns:
+#         List of video ids. 
+#     """
+#     video_ids = []
+#     for ins in json_list:
+#         if 'video_id' in ins:
+#             video_id = ins['video_id']
+#             if os.path.exists(f'{main_path}videos_raw/{video_id}.mp4'):
+#                 video_ids.append(video_id)
+#     return video_ids
 
 with open(main_path+'WLASL_v0.3.json', 'r') as data_file:
     json_data = data_file.read()
 
 instance_json = json.loads(json_data)
 
-get_videos_ids(instance_json[0]['instances'])
+# get_videos_ids(instance_json[0]['instances'])
 
-len(get_videos_ids(instance_json[0]['instances']))
+# len(get_videos_ids(instance_json[0]['instances']))
 
-wlasl_df["video_ids"] = wlasl_df["instances"].apply(get_videos_ids)
+# wlasl_df["video_ids"] = wlasl_df["instances"].apply(get_videos_ids)
 
 features_df = pd.DataFrame(columns=['gloss', 'video_id'])
 for row in wlasl_df.iterrows():
     ids = get_videos_ids(row[1][1])
     word = [row[1][0]] * len(ids)
     df = pd.DataFrame(list(zip(word, ids)), columns=features_df.columns)
-    features_df = features_df.append(df, ignore_index=True)
+    features_df = pd.concat([features_df, df], ignore_index=True)
 
-features_df
+# print(features_df)
 
-def move_videos_to_subdir(dataframe):
-    for label in dataframe["gloss"].unique():
-        dst_path = f'videos/{label}'
-        os.makedirs(dst_path, exist_ok=True)
+# def move_videos_to_subdir(dataframe):
+#     for label in dataframe["gloss"].unique():
+#         dst_path = f'videos/{label}'
+#         os.makedirs(dst_path, exist_ok=True)
         
-        for video in dataframe.loc[dataframe["gloss"] == label]["video_id"]:
-            src = f'{main_path}videos/{video}.mp4'
-            dst = dst_path + f'/{video}.mp4'
-            shutil.copyfile(src, dst)
+#         for video in dataframe.loc[dataframe["gloss"] == label]["video_id"]:
+#             src = f'{main_path}videos_raw/{video}.mp4'
+#             dst = f'{dst_path}/{video}.mp4'
+            
+#             try:
+#                 shutil.copyfile(src, dst)
+#             except IOError as e:
+#                 print(f"Could not copy file {src} to {dst}. Error: {e}")
+#             except Exception as e:
+#                 print(f"Unexpected error occurred while copying file {src} to {dst}. Error: {e}")
 
+# move_videos_to_subdir(features_df)
 
-move_videos_to_subdir(features_df)
+# os.listdir('videos/')
 
-os.listdir('videos/about/')
+# def create_empty_subdirs(dataframe, dst_root):
+#     for label in dataframe["gloss"].unique():
+#         dst_path = os.path.join(dst_root, label)
+#         os.makedirs(dst_path, exist_ok=True)
 
-import os
-
-def create_empty_subdirs(dataframe, dst_root):
-    for label in dataframe["gloss"].unique():
-        dst_path = os.path.join(dst_root, label)
-        os.makedirs(dst_path, exist_ok=True)
-
-# Example usage:
-dst_root = 'images'
-create_empty_subdirs(features_df, dst_root)
+# # Example usage:
+# dst_root = 'images'
+# create_empty_subdirs(features_df, dst_root)
 
 import os
 import torch
@@ -215,6 +218,7 @@ def plot_loss(loss_hist, metric_hist):
     plt.xlabel("Training Epochs")
     plt.legend()
     plt.show()
+    plt.savefig('loss.png')
     
 from torch import nn
 class Resnt18Rnn(nn.Module):
@@ -251,7 +255,6 @@ class Identity(nn.Module):
     def forward(self, x):
         return x    
 
-
 from torchvision import models
 from torch import nn
 
@@ -270,25 +273,39 @@ def get_model(num_classes, model_type="rnn"):
         model.fc = nn.Linear(num_features, num_classes)    
     return model
 
-
 import cv2
 import numpy as np
-def get_frames(filename, n_frames= 1):
+def get_frames(filename, n_frames=1, log_file='failed_videos.txt'):
     frames = []
     v_cap = cv2.VideoCapture(filename)
-    v_len = int(v_cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    frame_list= np.linspace(0, v_len-1, n_frames+1, dtype=np.int16)
+    if not v_cap.isOpened():
+        with open(log_file, 'a') as f:
+            f.write(f"Error opening video file: {filename}\n")
+        print(f"Error opening video file {filename}")
+        return frames, 0
     
-    for fn in range(v_len):
+    v_len = int(v_cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    if v_len < n_frames:  # Check if there are enough frames in the video
+        with open(log_file, 'a') as f:
+            f.write(f"Not enough frames in video file: {filename}\n")
+        print(f"Not enough frames in {filename}")
+        v_cap.release()
+        return frames, 0
+
+    frame_list = np.linspace(0, v_len-1, n_frames+1, dtype=np.int16)
+    
+    for fn in frame_list:
+        v_cap.set(cv2.CAP_PROP_POS_FRAMES, fn)
         success, frame = v_cap.read()
-        if success is False:
+        if not success:
+            with open(log_file, 'a') as f:
+                f.write(f"Failed to get frame {fn} from video file: {filename}\n")
+            print(f"Failed to get the frame {fn} from {filename}")
             continue
-        if (fn in frame_list):
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  
-            frames.append(frame)
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  
+        frames.append(frame)
     v_cap.release()
     return frames, v_len
-
 
 import torchvision.transforms as transforms
 from PIL import Image
@@ -319,7 +336,6 @@ def transform_frames(frames, model_type="rnn"):
     imgs_tensor = imgs_tensor.unsqueeze(0)
     return imgs_tensor
 
-
 def store_frames(frames, path2store):
     for ii, frame in enumerate(frames):
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)  
@@ -346,10 +362,14 @@ for root, dirs, files in os.walk(path2aCatgs, topdown=False):
         if extension not in name:
             continue
         path2vid = os.path.join(root, name)
-        frames, vlen = get_frames(path2vid, n_frames= n_frames)
+        frames, vlen = get_frames(path2vid, n_frames= n_frames, log_file = 'app/rundir/CPSC542-FinalProject/failed_videos.txt')
+        if vlen == 0:  # Indicates that the video file couldn't be processed
+            print(f"Skipping video {path2vid} due to errors.")
+            continue
         path2store = path2vid.replace(sub_folder, sub_folder_jpg)
         path2store = path2store.replace(extension, "")
         print(path2store)
         os.makedirs(path2store, exist_ok= True)
         store_frames(frames, path2store)
     print("-"*50)   
+

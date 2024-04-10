@@ -13,7 +13,6 @@ from keras import models
 from keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout, BatchNormalization
 
 from sklearn.preprocessing import LabelBinarizer
-
 from plotnine import *
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
