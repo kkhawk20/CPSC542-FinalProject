@@ -80,10 +80,9 @@ for row in wlasl_df.iterrows():
 import os
 import torch
 import copy
-from tqdm import tqdm_notebook
 from torchvision.transforms.functional import to_pil_image
 import matplotlib.pylab as plt
-from tqdm import tqdm_notebook
+from tqdm import tqdm
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 def get_vids(path2ajpgs):
@@ -183,7 +182,7 @@ def loss_epoch(model,loss_func,dataset_dl,sanity_check=False,opt=None):
     running_loss=0.0
     running_metric=0.0
     len_data = len(dataset_dl.dataset)
-    for xb, yb in tqdm_notebook(dataset_dl):
+    for xb, yb in tqdm(dataset_dl):
         xb=xb.to(device)
         yb=yb.to(device)
         output=model(xb)
@@ -383,48 +382,38 @@ from PIL import Image
 import os
 
 class SignLanguageDataset(Dataset):
-    def __init__(self, main_dir, transform=None):
+    def __init__(self, main_dir, transform=None, sequence_length=16):
         self.main_dir = main_dir
         self.transform = transform
-        self.total_imgs = []
-        self.labels = []
-        
-        # Prepare a mapping for the glosses to indices
-        self.gloss_to_index = {}
-        self.index_to_gloss = {}
-        self._prepare_dataset()
+        self.sequence_length = sequence_length
+        self.data_info = self._prepare_dataset()
+        self.labels = [x['label'] for x in self.data_info]
     
     def _prepare_dataset(self):
+        data_info = []
         glosses = os.listdir(self.main_dir)
         for index, gloss in enumerate(glosses):
-            self.gloss_to_index[gloss] = index
-            self.index_to_gloss[index] = gloss
             gloss_dir = os.path.join(self.main_dir, gloss)
-            for video_id in os.listdir(gloss_dir):
-                video_dir = os.path.join(gloss_dir, video_id)
-                frames = os.listdir(video_dir)
-                frames.sort()  # Make sure frames are in order
-                self.total_imgs.extend([os.path.join(video_dir, frame) for frame in frames])
-                self.labels.extend([index] * len(frames))
+            for instance_dir in os.listdir(gloss_dir):
+                instance_path = os.path.join(gloss_dir, instance_dir)
+                if os.path.isdir(instance_path):
+                    frames = sorted([os.path.join(instance_path, frame) for frame in os.listdir(instance_path)])
+                    if len(frames) == self.sequence_length:
+                        data_info.append({'label': index, 'frames': frames})
+        return data_info
 
     def __len__(self):
-        return len(self.total_imgs)
+        return len(self.data_info)
 
     def __getitem__(self, idx):
-        # Instead of single image, you want to load sequence of images here
-        video_dir = self.total_imgs[idx]  # This should point to the video directory
-        frames = [Image.open(os.path.join(video_dir, frame)).convert("RGB") for frame in sorted(os.listdir(video_dir))]
+        video_info = self.data_info[idx]
+        frames = [Image.open(frame).convert("RGB") for frame in video_info['frames']]
         
         if self.transform is not None:
             frames = [self.transform(frame) for frame in frames]
-        else:
-            frames = [transforms.ToTensor()(frame) for frame in frames]
         
-        # Stack frames along a new dimension
         video_tensor = torch.stack(frames)
-        
-        # The label for all frames in this video is the same
-        label = self.labels[idx]
+        label = video_info['label']
         return video_tensor, label
 
 # Define a transform to convert images to tensors and normalize
@@ -435,23 +424,19 @@ transform = transforms.Compose([
 ])
 
 # Create the dataset
-dataset = SignLanguageDataset(main_dir='/app/rundir/CPSC542-FinalProject/images', transform=transform)
-
-# Create a DataLoader
-data_loader = DataLoader(dataset, batch_size=32, shuffle=True)
+dataset = SignLanguageDataset(main_dir='/app/rundir/CPSC542-FinalProject/images/', transform=transform, sequence_length=16)
 
 from torch.utils.data import random_split
 
-# Define a proportion for your training data (e.g., 80%)
+# Split the dataset and create DataLoaders
 train_size = int(0.8 * len(dataset))
 val_size = len(dataset) - train_size
-
-# Split the dataset
 train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
-
-# Create DataLoaders for both training and validation sets
 train_dl = DataLoader(train_dataset, batch_size=32, shuffle=True)
 val_dl = DataLoader(val_dataset, batch_size=32, shuffle=False)
+# Create a DataLoader
+data_loader = DataLoader(dataset, batch_size=32, shuffle=True)
+
 
 # Assuming `features_df` contains all the necessary data at this point
 num_classes = features_df['gloss'].nunique()
