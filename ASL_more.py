@@ -375,6 +375,84 @@ n_frames = 16
 #         store_frames(frames, path2store)
 #     print("-"*50)   
 
+# Reading in the data
+import torch
+from torchvision import transforms
+from torch.utils.data import Dataset, DataLoader
+from PIL import Image
+import os
+
+class SignLanguageDataset(Dataset):
+    def __init__(self, main_dir, transform=None):
+        self.main_dir = main_dir
+        self.transform = transform
+        self.total_imgs = []
+        self.labels = []
+        
+        # Prepare a mapping for the glosses to indices
+        self.gloss_to_index = {}
+        self.index_to_gloss = {}
+        self._prepare_dataset()
+    
+    def _prepare_dataset(self):
+        glosses = os.listdir(self.main_dir)
+        for index, gloss in enumerate(glosses):
+            self.gloss_to_index[gloss] = index
+            self.index_to_gloss[index] = gloss
+            gloss_dir = os.path.join(self.main_dir, gloss)
+            for video_id in os.listdir(gloss_dir):
+                video_dir = os.path.join(gloss_dir, video_id)
+                frames = os.listdir(video_dir)
+                frames.sort()  # Make sure frames are in order
+                self.total_imgs.extend([os.path.join(video_dir, frame) for frame in frames])
+                self.labels.extend([index] * len(frames))
+
+    def __len__(self):
+        return len(self.total_imgs)
+
+    def __getitem__(self, idx):
+        # Instead of single image, you want to load sequence of images here
+        video_dir = self.total_imgs[idx]  # This should point to the video directory
+        frames = [Image.open(os.path.join(video_dir, frame)).convert("RGB") for frame in sorted(os.listdir(video_dir))]
+        
+        if self.transform is not None:
+            frames = [self.transform(frame) for frame in frames]
+        else:
+            frames = [transforms.ToTensor()(frame) for frame in frames]
+        
+        # Stack frames along a new dimension
+        video_tensor = torch.stack(frames)
+        
+        # The label for all frames in this video is the same
+        label = self.labels[idx]
+        return video_tensor, label
+
+# Define a transform to convert images to tensors and normalize
+transform = transforms.Compose([
+    transforms.Resize((224, 224)),  # Resize images if needed
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+])
+
+# Create the dataset
+dataset = SignLanguageDataset(main_dir='/app/rundir/CPSC542-FinalProject/images', transform=transform)
+
+# Create a DataLoader
+data_loader = DataLoader(dataset, batch_size=32, shuffle=True)
+
+from torch.utils.data import random_split
+
+# Define a proportion for your training data (e.g., 80%)
+train_size = int(0.8 * len(dataset))
+val_size = len(dataset) - train_size
+
+# Split the dataset
+train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+
+# Create DataLoaders for both training and validation sets
+train_dl = DataLoader(train_dataset, batch_size=32, shuffle=True)
+val_dl = DataLoader(val_dataset, batch_size=32, shuffle=False)
+
 # Assuming `features_df` contains all the necessary data at this point
 num_classes = features_df['gloss'].nunique()
 print(num_classes)
