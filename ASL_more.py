@@ -9,24 +9,24 @@ wlasl_df = pd.read_json(main_path + "WLASL_v0.3.json")
 
 print(wlasl_df.head())
 
-# def get_videos_ids(json_list):
-#     """
-#     check if the video id is available in the dataset
-#     and return the viedos ids of the current instance
+def get_videos_ids(json_list):
+    """
+    check if the video id is available in the dataset
+    and return the viedos ids of the current instance
     
-#     Args:
-#         json_list: Instance of video metadata.
+    Args:
+        json_list: Instance of video metadata.
         
-#     Returns:
-#         List of video ids. 
-#     """
-#     video_ids = []
-#     for ins in json_list:
-#         if 'video_id' in ins:
-#             video_id = ins['video_id']
-#             if os.path.exists(f'{main_path}videos_raw/{video_id}.mp4'):
-#                 video_ids.append(video_id)
-#     return video_ids
+    Returns:
+        List of video ids. 
+    """
+    video_ids = []
+    for ins in json_list:
+        if 'video_id' in ins:
+            video_id = ins['video_id']
+            if os.path.exists(f'{main_path}videos_raw/{video_id}.mp4'):
+                video_ids.append(video_id)
+    return video_ids
 
 with open(main_path+'WLASL_v0.3.json', 'r') as data_file:
     json_data = data_file.read()
@@ -357,6 +357,8 @@ for cat in listOfCategories:
 
 extension = ".mp4"
 n_frames = 16
+
+# # This is used for data engineering 
 # for root, dirs, files in os.walk(path2aCatgs, topdown=False):
 #     for name in files:
 #         if extension not in name:
@@ -372,4 +374,83 @@ n_frames = 16
 #         os.makedirs(path2store, exist_ok= True)
 #         store_frames(frames, path2store)
 #     print("-"*50)   
+
+# This is going to run the model and such
+path2ajpgs = sub_folder_jpg
+ids, labels, listOfCategories = get_vids(path2ajpgs)
+len(ids), len(labels), len(listOfCategories)
+
+from sklearn.model_selection import train_test_split
+ids_train, ids_val, labels_train, labels_val = train_test_split(ids, labels, test_size=0.1, random_state=42)
+len(ids_train), len(ids_val)
+
+from torch.utils.data import Dataset
+
+class CustomDataset(Dataset):
+    def __init__(self, ids, labels, transform=None):
+        self.ids = ids
+        self.labels = labels
+        self.transform = transform
+    def __len__(self):
+        return len(self.ids)
+    def __getitem__(self, idx):
+        path2img = self.ids[idx]
+        img = Image.open(path2img)
+        img = img.convert('RGB')
+        if self.transform:
+            img = self.transform(img)
+        label = self.labels[idx]
+        return img, label
+    
+from torchvision import transforms
+
+mean = [0.485, 0.456, 0.406]
+std = [0.229, 0.224, 0.225]
+train_transformer = transforms.Compose([
+    transforms.RandomResizedCrop(224),
+    transforms.RandomHorizontalFlip(),
+    transforms.ToTensor(),
+    transforms.Normalize(mean, std)
+])
+val_transformer = transforms.Compose([
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
+    transforms.ToTensor(),
+    transforms.Normalize(mean, std)
+])
+
+train_ds = CustomDataset(ids_train, labels_train, transform=train_transformer)
+val_ds = CustomDataset(ids_val, labels_val, transform=val_transformer)
+
+from torch.utils.data import DataLoader
+batch_size = 32
+train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+val_dl = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
+
+import torch.optim as optim
+from torch.optim import lr_scheduler
+from torch import nn
+from torchvision import models
+import torch
+
+model = get_model(num_classes=len(listOfCategories), model_type="rnn")
+model = model.to(device)
+
+loss_func = nn.CrossEntropyLoss(reduction="sum")
+opt = optim.Adam(model.parameters(), lr=0.001)
+lr_scheduler = lr_scheduler.ReduceLROnPlateau(opt, mode='min', factor=0.1, patience=5)
+
+params_train={
+    "num_epochs": 10,
+    "optimizer": opt,
+    "loss_func": loss_func,
+    "train_dl": train_dl,
+    "val_dl": val_dl,
+    "sanity_check": False,
+    "lr_scheduler": lr_scheduler,
+    "path2weights": "app/rundir/CPSC542-FinalProject/weights.pt",
+}
+
+model, loss_hist, metric_hist = train_val(model, params_train)
+plot_loss(loss_hist, metric_hist)
 
