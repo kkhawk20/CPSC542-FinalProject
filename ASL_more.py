@@ -357,19 +357,19 @@ for cat in listOfCategories:
 
 extension = ".mp4"
 n_frames = 16
-for root, dirs, files in os.walk(path2aCatgs, topdown=False):
-    for name in files:
-        if extension not in name:
-            continue
-        path2vid = os.path.join(root, name)
-        frames, vlen = get_frames(path2vid, n_frames= n_frames, log_file = 'app/rundir/CPSC542-FinalProject/failed_videos.txt')
-        if vlen == 0:  # Indicates that the video file couldn't be processed
-            print(f"Skipping video {path2vid} due to errors.")
-            continue
-        path2store = path2vid.replace(sub_folder, sub_folder_jpg)
-        path2store = path2store.replace(extension, "")
-        print(path2store)
-        os.makedirs(path2store, exist_ok= True)
-        store_frames(frames, path2store)
-    print("-"*50)   
+# for root, dirs, files in os.walk(path2aCatgs, topdown=False):
+#     for name in files:
+#         if extension not in name:
+#             continue
+#         path2vid = os.path.join(root, name)
+#         frames, vlen = get_frames(path2vid, n_frames= n_frames, log_file = 'app/rundir/CPSC542-FinalProject/failed_videos.txt')
+#         if vlen == 0:  # Indicates that the video file couldn't be processed
+#             print(f"Skipping video {path2vid} due to errors.")
+#             continue
+#         path2store = path2vid.replace(sub_folder, sub_folder_jpg)
+#         path2store = path2store.replace(extension, "")
+#         print(path2store)
+#         os.makedirs(path2store, exist_ok= True)
+#         store_frames(frames, path2store)
+#     print("-"*50)   
 
