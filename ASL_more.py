@@ -375,82 +375,40 @@ n_frames = 16
 #         store_frames(frames, path2store)
 #     print("-"*50)   
 
-# This is going to run the model and such
-path2ajpgs = sub_folder_jpg
-ids, labels, listOfCategories = get_vids(path2ajpgs)
-len(ids), len(labels), len(listOfCategories)
+# Assuming `features_df` contains all the necessary data at this point
+num_classes = features_df['gloss'].nunique()
+print(num_classes)
 
-from sklearn.model_selection import train_test_split
-ids_train, ids_val, labels_train, labels_val = train_test_split(ids, labels, test_size=0.1, random_state=42)
-len(ids_train), len(ids_val)
-
-from torch.utils.data import Dataset
-
-class CustomDataset(Dataset):
-    def __init__(self, ids, labels, transform=None):
-        self.ids = ids
-        self.labels = labels
-        self.transform = transform
-    def __len__(self):
-        return len(self.ids)
-    def __getitem__(self, idx):
-        path2img = self.ids[idx]
-        img = Image.open(path2img)
-        img = img.convert('RGB')
-        if self.transform:
-            img = self.transform(img)
-        label = self.labels[idx]
-        return img, label
-    
-from torchvision import transforms
-
-mean = [0.485, 0.456, 0.406]
-std = [0.229, 0.224, 0.225]
-train_transformer = transforms.Compose([
-    transforms.RandomResizedCrop(224),
-    transforms.RandomHorizontalFlip(),
-    transforms.ToTensor(),
-    transforms.Normalize(mean, std)
-])
-val_transformer = transforms.Compose([
-    transforms.Resize(256),
-    transforms.CenterCrop(224),
-    transforms.ToTensor(),
-    transforms.Normalize(mean, std)
-])
-
-train_ds = CustomDataset(ids_train, labels_train, transform=train_transformer)
-val_ds = CustomDataset(ids_val, labels_val, transform=val_transformer)
-
-from torch.utils.data import DataLoader
-batch_size = 32
-train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
-val_dl = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
-
-import torch.optim as optim
-from torch.optim import lr_scheduler
-from torch import nn
-from torchvision import models
-import torch
-
-model = get_model(num_classes=len(listOfCategories), model_type="rnn")
+model = get_model(num_classes=num_classes, model_type="rnn")
 model = model.to(device)
 
-loss_func = nn.CrossEntropyLoss(reduction="sum")
-opt = optim.Adam(model.parameters(), lr=0.001)
-lr_scheduler = lr_scheduler.ReduceLROnPlateau(opt, mode='min', factor=0.1, patience=5)
+from torch import optim
 
-params_train={
-    "num_epochs": 10,
-    "optimizer": opt,
+# Hyperparameters
+lr = 0.001
+momentum = 0.9
+num_epochs = 20  # Or any other value
+
+# Loss Function
+loss_func = nn.CrossEntropyLoss()
+
+# Optimizer
+optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum)
+
+# Learning Rate Scheduler
+lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=7, gamma=0.1)
+
+params = {
+    "num_epochs": num_epochs,
     "loss_func": loss_func,
+    "optimizer": optimizer,
     "train_dl": train_dl,
     "val_dl": val_dl,
     "sanity_check": False,
     "lr_scheduler": lr_scheduler,
-    "path2weights": "app/rundir/CPSC542-FinalProject/weights.pt",
+    "path2weights": "best_weights.pt",
 }
 
-model, loss_hist, metric_hist = train_val(model, params_train)
-plot_loss(loss_hist, metric_hist)
+trained_model, loss_hist, metric_hist = train_val(model, params)
 
+plot_loss(loss_hist, metric_hist)
