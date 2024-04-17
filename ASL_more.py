@@ -503,12 +503,31 @@ with torch.no_grad():
 # Get the predicted classes for each image
 _, preds = torch.max(outputs, 1)
 
-# Plot the images in the batch, along with predicted and true labels
+
+# Make sure this uses the same mean and std as your transforms
+def denormalize(x):
+    mean = np.array([0.485, 0.456, 0.406])
+    std = np.array([0.229, 0.224, 0.225])
+    x = x.clone().numpy().transpose((1, 2, 0))
+    x = std * x + mean
+    x = np.clip(x, 0, 1)
+    return x
+
+# Visualization
 fig, axes = plt.subplots(4, 4, figsize=(12, 12))
-for i, ax in enumerate(axes.flat):
-    ax.imshow(inputs[i].permute(1, 2, 0).cpu())
+axes = axes.flatten()
+
+for i, ax in enumerate(axes):
+    # Assuming the first dimension is sequence, we take the first frame [0]
+    img = denormalize(inputs[i][0].cpu())
+    label = labels[i].item()
+    pred = preds[i].item()
+    
+    ax.imshow(img)
     ax.axis('off')
-    ax.set_title(f'Predicted: {preds[i]}, Actual: {labels[i]}')
+    ax.set_title(f'Predicted: {pred}, Actual: {label}')
+
 plt.tight_layout()
 plt.savefig('predictions.png')
+
 
