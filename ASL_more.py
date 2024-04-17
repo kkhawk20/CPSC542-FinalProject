@@ -211,7 +211,6 @@ def plot_loss(loss_hist, metric_hist):
     plt.show()
     plt.savefig('loss.png')
 
-
     plt.title("Train-Val Accuracy")
     plt.plot(range(1,num_epochs+1), metric_hist["train"],label="train")
     plt.plot(range(1,num_epochs+1), metric_hist["val"],label="val")
