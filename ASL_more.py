@@ -209,6 +209,8 @@ def plot_loss(loss_hist, metric_hist):
     plt.xlabel("Training Epochs")
     plt.legend()
     plt.show()
+    plt.savefig('loss.png')
+
 
     plt.title("Train-Val Accuracy")
     plt.plot(range(1,num_epochs+1), metric_hist["train"],label="train")
@@ -217,7 +219,7 @@ def plot_loss(loss_hist, metric_hist):
     plt.xlabel("Training Epochs")
     plt.legend()
     plt.show()
-    plt.savefig('loss.png')
+    plt.savefig('accuracy.png')
     
 from torch import nn
 class Resnt18Rnn(nn.Module):
@@ -475,3 +477,39 @@ params = {
 trained_model, loss_hist, metric_hist = train_val(model, params)
 
 plot_loss(loss_hist, metric_hist)
+
+# Now utilizing this trained model on the test data
+
+# Load the best model weights
+model.load_state_dict(torch.load("best_weights.pt"))
+
+# Evaluate the model on the test data
+model.eval()
+with torch.no_grad():
+    test_loss, test_metric = loss_epoch(model, loss_func, val_dl)
+print(f"Test Loss: {test_loss}, Test Accuracy: {test_metric}")
+
+# Pulling a random sequence of images from the val_dl to visualize the predictions
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Get a batch of data
+inputs, labels = next(iter(val_dl))
+
+# Make predictions
+model.eval()
+with torch.no_grad():
+    outputs = model(inputs.to(device))
+
+# Get the predicted classes for each image
+_, preds = torch.max(outputs, 1)
+
+# Plot the images in the batch, along with predicted and true labels
+fig, axes = plt.subplots(4, 4, figsize=(12, 12))
+for i, ax in enumerate(axes.flat):
+    ax.imshow(inputs[i].permute(1, 2, 0).cpu())
+    ax.axis('off')
+    ax.set_title(f'Predicted: {preds[i]}, Actual: {labels[i]}')
+plt.tight_layout()
+plt.savefig('predictions.png')
+
