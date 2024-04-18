@@ -529,3 +529,60 @@ for i in range(len(preds)):
 
 plt.tight_layout()
 plt.savefit("predictions.png")
+
+
+# Predicting on a new video! 
+
+import torch
+from torchvision import transforms
+from PIL import Image
+import cv2
+import numpy as np
+import json
+import os
+
+# Make sure to include the rest of your dependencies and model definition here...
+
+# Load the trained model
+model = get_model(num_classes=num_classes, model_type="rnn")
+model.load_state_dict(torch.load("best_weights.pt"))
+model.to(device)
+model.eval()
+
+# Dictionary to convert numeric labels to words (from your training script)
+index_to_gloss = {index: gloss for gloss, index in dataset.gloss_to_index.items()}
+
+# Video processing function
+def process_video(video_path, transform, sequence_length=16):
+    frames = get_frames(video_path, n_frames=sequence_length)
+    tensor_frames = [transform(Image.fromarray(frame)) for frame in frames]
+    video_tensor = torch.stack(tensor_frames).unsqueeze(0)
+    return video_tensor.to(device)
+
+# Function to predict glosses from video tensor
+def predict_glosses(video_tensor, model):
+    with torch.no_grad():
+        outputs = model(video_tensor)
+        _, preds = torch.max(outputs, 1)
+        predicted_glosses = [index_to_gloss[pred.item()] for pred in preds]
+    return predicted_glosses
+
+# Main function to handle video to transcript
+def video_to_transcript(video_path, output_path):
+    transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+
+    video_tensor = process_video(video_path, transform)
+    glosses = predict_glosses(video_tensor, model)
+
+    # Write transcript to file
+    with open(output_path, 'w') as f:
+        for gloss in glosses:
+            f.write(f"{gloss}\n")
+
+# Replace 'input_video.mp4' with your video file path and 'output_transcript.txt' with your desired output file name
+video_to_transcript('input_video.mp4', 'output_transcript.txt')
+
