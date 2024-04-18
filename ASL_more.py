@@ -390,13 +390,17 @@ class SignLanguageDataset(Dataset):
         self.main_dir = main_dir
         self.transform = transform
         self.sequence_length = sequence_length
-        self.data_info = self._prepare_dataset()
+        self.data_info, self.gloss_to_index, self.index_to_gloss = self._prepare_dataset()
         self.labels = [x['label'] for x in self.data_info]
     
     def _prepare_dataset(self):
         data_info = []
+        gloss_to_index = {}
+        index_to_gloss = {}
         glosses = os.listdir(self.main_dir)
         for index, gloss in enumerate(glosses):
+            gloss_to_index[gloss] = index
+            index_to_gloss[index] = gloss
             gloss_dir = os.path.join(self.main_dir, gloss)
             for instance_dir in os.listdir(gloss_dir):
                 instance_path = os.path.join(gloss_dir, instance_dir)
@@ -404,7 +408,7 @@ class SignLanguageDataset(Dataset):
                     frames = sorted([os.path.join(instance_path, frame) for frame in os.listdir(instance_path)])
                     if len(frames) == self.sequence_length:
                         data_info.append({'label': index, 'frames': frames})
-        return data_info
+        return data_info, gloss_to_index, index_to_gloss
 
     def __len__(self):
         return len(self.data_info)
@@ -436,7 +440,6 @@ train_dl = DataLoader(train_dataset, batch_size=32, shuffle=True)
 val_dl = DataLoader(val_dataset, batch_size=32, shuffle=False)
 # Create a DataLoader
 data_loader = DataLoader(dataset, batch_size=32, shuffle=True)
-
 
 # Assuming `features_df` contains all the necessary data at this point
 num_classes = features_df['gloss'].nunique()
