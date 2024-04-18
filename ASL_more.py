@@ -210,6 +210,7 @@ def plot_loss(loss_hist, metric_hist):
     plt.legend()
     plt.show()
     plt.savefig('loss.png')
+    plt.close()
 
     plt.title("Train-Val Accuracy")
     plt.plot(range(1,num_epochs+1), metric_hist["train"],label="train")
@@ -219,6 +220,7 @@ def plot_loss(loss_hist, metric_hist):
     plt.legend()
     plt.show()
     plt.savefig('accuracy.png')
+    plt.close()
     
 from torch import nn
 class Resnt18Rnn(nn.Module):
@@ -375,6 +377,7 @@ n_frames = 16
 #         store_frames(frames, path2store)
 #     print("-"*50)   
 
+# Model and Predictions!!
 # Reading in the data
 import torch
 from torchvision import transforms
@@ -407,13 +410,9 @@ class SignLanguageDataset(Dataset):
         return len(self.data_info)
 
     def __getitem__(self, idx):
+        # Ensure idx refers to the start of a video sequence
         video_info = self.data_info[idx]
-        frames = [Image.open(frame).convert("RGB") for frame in video_info['frames']]
-        
-        if self.transform is not None:
-            frames = [self.transform(frame) for frame in frames]
-        
-        video_tensor = torch.stack(frames)
+        video_tensor = torch.stack([self.transform(Image.open(frame).convert("RGB")) for frame in video_info['frames']])
         label = video_info['label']
         return video_tensor, label
 
@@ -477,8 +476,6 @@ trained_model, loss_hist, metric_hist = train_val(model, params)
 
 plot_loss(loss_hist, metric_hist)
 
-# Now utilizing this trained model on the test data
-
 # Load the best model weights
 model.load_state_dict(torch.load("best_weights.pt"))
 
@@ -503,7 +500,6 @@ with torch.no_grad():
 # Get the predicted classes for each image
 _, preds = torch.max(outputs, 1)
 
-
 # Make sure this uses the same mean and std as your transforms
 def denormalize(x):
     mean = np.array([0.485, 0.456, 0.406])
@@ -513,21 +509,23 @@ def denormalize(x):
     x = np.clip(x, 0, 1)
     return x
 
-# Visualization
-fig, axes = plt.subplots(4, 4, figsize=(12, 12))
-axes = axes.flatten()
+# Now utilizing this trained model on the test data
+index_to_gloss = {index: gloss for gloss, index in dataset.gloss_to_index.items()}
+predicted_glosses = [index_to_gloss[pred.item()] for pred in preds]
+actual_glosses = [index_to_gloss[label.item()] for label in labels]
 
-for i, ax in enumerate(axes):
-    # Assuming the first dimension is sequence, we take the first frame [0]
-    img = denormalize(inputs[i][0].cpu())
-    label = labels[i].item()
-    pred = preds[i].item()
+# Visualization
+fig, axes = plt.subplots(figsize=(12, 12))
+
+for i in range(len(preds)):
+    img = denormalize(inputs[0][i].cpu())  # inputs[0] because we're assuming all frames belong to the first video
+    pred_gloss = predicted_glosses[i]
+    actual_gloss = actual_glosses[i]
     
+    ax = fig.add_subplot(1, len(preds), i+1)
     ax.imshow(img)
     ax.axis('off')
-    ax.set_title(f'Predicted: {pred}, Actual: {label}')
+    ax.set_title(f'Predicted: {pred_gloss}, Actual: {actual_gloss}')
 
 plt.tight_layout()
-plt.savefig('predictions.png')
-
-
+plt.savefit("predictions.png")
