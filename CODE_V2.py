@@ -1,10 +1,52 @@
+import json
 import cv2
 import numpy as np
+import pandas as pd
 from PIL import Image
 import torch
 from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader, random_split
 from torchvision import transforms, models
+
+
+def get_labels():
+    main_path = "/app/rundir/CPSC542-FinalProject/archive-3/"
+    wlasl_df = pd.read_json(main_path + "WLASL_v0.3.json")
+
+    print(wlasl_df.head())
+
+    def get_videos_ids(json_list):
+        """
+        check if the video id is available in the dataset
+        and return the viedos ids of the current instance
+        
+        Args:
+            json_list: Instance of video metadata.
+            
+        Returns:
+            List of video ids. 
+        """
+        video_ids = []
+        for ins in json_list:
+            if 'video_id' in ins:
+                video_id = ins['video_id']
+                if os.path.exists(f'{main_path}videos_raw/{video_id}.mp4'):
+                    video_ids.append(video_id)
+        return video_ids
+
+    with open(main_path+'WLASL_v0.3.json', 'r') as data_file:
+        json_data = data_file.read()
+
+    instance_json = json.loads(json_data)
+
+    features_df = pd.DataFrame(columns=['gloss', 'video_id'])
+    for row in wlasl_df.iterrows():
+        ids = get_videos_ids(row[1][1])
+        word = [row[1][0]] * len(ids)
+        df = pd.DataFrame(list(zip(word, ids)), columns=features_df.columns)
+        features_df = pd.concat([features_df, df], ignore_index=True)
+
+    return features_df
 
 # Utility functions
 def get_frames(video_path, num_frames=16, log_file='failed_videos.txt'):
@@ -121,8 +163,8 @@ def predict_from_video(video_path, model, frame_count=16):
 
 # Main execution function
 def run_model():
-    dataset_path = '/path/to/dataset'
-    num_classes = 25  # Adjust according to actual dataset
+    dataset_path = '/app/rundir/CPSC542 - FINALPROJECT/images'
+    num_classes = 2000  # Adjust according to actual dataset
     dataset = SignLanguageDataset(root_dir=dataset_path)
     train_size = int(0.8 * len(dataset))
     val_size = len(dataset) - train_size
@@ -138,6 +180,6 @@ def run_model():
 
 # Running everything
 model = run_model()
-video_path = '/path/to/new/video.mp4'
+video_path = '/app/rundir/CPSC542 - FINALPROJECT/input_video.mp4'
 predicted_label = predict_from_video(video_path, model)
 print(f'Predicted Sign Language Gloss: {predicted_label}')
