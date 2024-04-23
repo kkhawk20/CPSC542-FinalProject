@@ -8,7 +8,6 @@ from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader, random_split
 from torchvision import transforms, models
 
-
 def get_labels():
     main_path = "/app/rundir/CPSC542-FinalProject/archive-3/"
     wlasl_df = pd.read_json(main_path + "WLASL_v0.3.json")
@@ -116,6 +115,45 @@ class ResNet18RNN(nn.Module):
         _, (hn, _) = self.rnn(cnn_emb.view(bsz, seq_len, -1))
         out = self.fc(hn[-1])
         return out
+    
+import optuna
+import torch.optim as optim
+from torch import nn
+
+def objective(trial):
+    # Hyperparameters to be tuned by Optuna
+    lr = trial.suggest_loguniform('lr', 1e-5, 1e-1)
+    rnn_hidden_size = trial.suggest_categorical('rnn_hidden_size', [128, 256, 512])
+    rnn_num_layers = trial.suggest_int('rnn_num_layers', 1, 3)
+
+    # Model initialization
+    model = ResNet18RNN(num_classes=25, hidden_size=rnn_hidden_size, num_layers=rnn_num_layers)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
+
+    # Training logic
+    for epoch in range(3):  # using fewer epochs for the tuning phase
+        model.train()
+        for inputs, labels in train_loader:
+            optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+
+        # Simple evaluation logic for tuning
+        model.eval()
+        accuracy = 0
+        total = 0
+        for inputs, labels in val_loader:
+            with torch.no_grad():
+                outputs = model(inputs)
+                _, predicted = torch.max(outputs.data, 1)
+                total += labels.size(0)
+                accuracy += (predicted == labels).sum().item()
+    
+    return accuracy / total
+
 
 # Training function
 def train_model(model, dataloaders, criterion, optimizer, num_epochs=25):
@@ -183,3 +221,8 @@ model = run_model()
 video_path = '/app/rundir/CPSC542 - FINALPROJECT/input_video.mp4'
 predicted_label = predict_from_video(video_path, model)
 print(f'Predicted Sign Language Gloss: {predicted_label}')
+
+# Grabbing the features_df to look at classes
+features_df = get_labels()
+index_to_label = {idx: label for idx, label in enumerate(features_df['gloss'].unique())}
+print(index_to_label)
