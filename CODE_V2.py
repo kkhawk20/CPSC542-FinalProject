@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 from PIL import Image
 import torch
+import os
 from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader, random_split
 from torchvision import transforms, models
@@ -111,19 +112,38 @@ class SignLanguageDataset(Dataset):
 
 # Model definition
 class ResNet18RNN(nn.Module):
-    def __init__(self, num_classes, pretrained=True, hidden_size=256, num_layers=1):
-        super().__init__()
-        self.base_model = models.resnet18(pretrained=pretrained)
-        self.base_model.fc = nn.Identity()
-        self.rnn = nn.LSTM(self.base_model.fc.in_features, hidden_size, num_layers, batch_first=True)
-        self.fc = nn.Linear(hidden_size, num_classes)
+    def __init__(self, num_classes, hidden_size, num_layers):
+        super(ResNet18RNN, self).__init__()
+        # Load a pre-trained ResNet and replace the fully connected layer
+        self.base_model = models.resnet18(pretrained=True)
+        self.base_model.fc = nn.Identity()  # Remove the final fully connected layer
+
+        # Assume the output of the average pool layer of ResNet18 is 512 (for ResNet18)
+        num_features = 512  # This is specific to ResNet18
+
+        # Define the LSTM layer using the number of features output by the ResNet
+        self.rnn = nn.LSTM(input_size=num_features, hidden_size=hidden_size, num_layers=num_layers, batch_first=True)
+        self.fc = nn.Linear(hidden_size, num_classes)  # Final classification layer
 
     def forward(self, x):
-        bsz, seq_len, C, H, W = x.size()
-        cnn_emb = torch.cat([self.base_model(x[:, i]) for i in range(seq_len)], dim=1)
-        _, (hn, _) = self.rnn(cnn_emb.view(bsz, seq_len, -1))
-        out = self.fc(hn[-1])
+        # x dimensions: (batch, seq, channels, height, width)
+        batch_size, seq_len, C, H, W = x.size()
+        x = x.view(batch_size * seq_len, C, H, W)  # Reshape for feeding into CNN
+        cnn_out = self.base_model(x)  # Pass through the CNN
+
+        # Reshape the CNN output to fit LSTM input requirements
+        cnn_out = cnn_out.view(batch_size, seq_len, -1)
+
+        # Pass the CNN features through the LSTM
+        rnn_out, _ = self.rnn(cnn_out)
+
+        # Take the outputs from the last time step
+        last_time_step_out = rnn_out[:, -1, :]
+
+        # Pass through the fully connected layer
+        out = self.fc(last_time_step_out)
         return out
+
     
 import optuna
 import torch.optim as optim
@@ -145,13 +165,12 @@ def train_final_model(train_loader, val_loader, best_params):
     return train_model(model, {'train': train_loader, 'val': val_loader}, criterion, optimizer, num_epochs=20)
 
 def run_optuna_tuning():
-    train_loader, val_loader = setup_data_loaders('/app/rundir/CPSC542-FINALPROJECT/images')
+    train_loader, val_loader = setup_data_loaders('/app/rundir/CPSC542-FinalProject/images')
     study = optuna.create_study(direction='maximize')
-    study.optimize(lambda trial: objective(trial, train_loader, val_loader), n_trials=20)
+    study.optimize(lambda trial: objective(trial), n_trials=20)
     print("Best trial:", study.best_trial)
     final_model = train_final_model(train_loader, val_loader, study.best_trial.params)
     return final_model
-
 
 # Define Optuna objective
 def objective(trial):
@@ -237,7 +256,7 @@ def predict_from_video(video_path, model, frame_count=16):
 
 # Main execution function
 def run_model():
-    dataset_path = '/app/rundir/CPSC542 - FINALPROJECT/images'
+    dataset_path = '/app/rundir/CPSC542-FinalProject/images'
     num_classes = 2000  # Adjust according to actual dataset
     dataset = SignLanguageDataset(root_dir=dataset_path)
     train_size = int(0.8 * len(dataset))
@@ -254,7 +273,7 @@ def run_model():
 
 # Running everything
 model = run_optuna_tuning()
-video_path = '/app/rundir/CPSC542-FINALPROJECT/input_video.mp4'
+video_path = '/app/rundir/CPSC542-FinalProject/input_video.mp4'
 predicted_label = predict_from_video(video_path, model)
 print(f'Predicted Sign Language Gloss: {predicted_label}')
 
