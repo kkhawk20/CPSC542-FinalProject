@@ -1,3 +1,12 @@
+'''
+The objective of this code file is to simplify all the other code files into one single file,
+integrating the use of object oriented programming, cleaning everything up
+
+This model is utilizing the Obtuna tuner, as well asa RESNET18 model with an RNN on top of it
+This model also takes in a new random video found and will attempt to translate it into a file output
+'''
+
+
 import json
 import cv2
 import numpy as np
@@ -120,20 +129,48 @@ import optuna
 import torch.optim as optim
 from torch import nn
 
+def setup_data_loaders(dataset_path):
+    dataset = SignLanguageDataset(root_dir=dataset_path)
+    train_size = int(0.8 * len(dataset))
+    val_size = len(dataset) - train_size
+    train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
+    return train_loader, val_loader
+
+def train_final_model(train_loader, val_loader, best_params):
+    model = ResNet18RNN(num_classes=2000, hidden_size=best_params['rnn_hidden_size'], num_layers=best_params['rnn_num_layers'])
+    optimizer = optim.SGD(model.parameters(), lr=best_params['lr'], momentum=0.9)
+    criterion = nn.CrossEntropyLoss()
+    return train_model(model, {'train': train_loader, 'val': val_loader}, criterion, optimizer, num_epochs=20)
+
+def run_optuna_tuning():
+    train_loader, val_loader = setup_data_loaders('/app/rundir/CPSC542-FINALPROJECT/images')
+    study = optuna.create_study(direction='maximize')
+    study.optimize(lambda trial: objective(trial, train_loader, val_loader), n_trials=20)
+    print("Best trial:", study.best_trial)
+    final_model = train_final_model(train_loader, val_loader, study.best_trial.params)
+    return final_model
+
+
+# Define Optuna objective
 def objective(trial):
     # Hyperparameters to be tuned by Optuna
     lr = trial.suggest_loguniform('lr', 1e-5, 1e-1)
     rnn_hidden_size = trial.suggest_categorical('rnn_hidden_size', [128, 256, 512])
     rnn_num_layers = trial.suggest_int('rnn_num_layers', 1, 3)
 
-    # Model initialization
-    model = ResNet18RNN(num_classes=25, hidden_size=rnn_hidden_size, num_layers=rnn_num_layers)
+    # Load data loaders
+    global train_loader, val_loader
+
+    # Model initialization with trial suggested parameters
+    model = ResNet18RNN(num_classes=2000, hidden_size=rnn_hidden_size, num_layers=rnn_num_layers)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
 
     # Training logic
-    for epoch in range(3):  # using fewer epochs for the tuning phase
-        model.train()
+    model.train()
+    for epoch in range(3):  # Short training for hyperparameter tuning
         for inputs, labels in train_loader:
             optimizer.zero_grad()
             outputs = model(inputs)
@@ -141,19 +178,18 @@ def objective(trial):
             loss.backward()
             optimizer.step()
 
-        # Simple evaluation logic for tuning
-        model.eval()
-        accuracy = 0
-        total = 0
-        for inputs, labels in val_loader:
-            with torch.no_grad():
-                outputs = model(inputs)
-                _, predicted = torch.max(outputs.data, 1)
-                total += labels.size(0)
-                accuracy += (predicted == labels).sum().item()
-    
-    return accuracy / total
+    # Evaluation logic
+    model.eval()
+    accuracy = 0
+    total = 0
+    for inputs, labels in val_loader:
+        with torch.no_grad():
+            outputs = model(inputs)
+            _, predicted = torch.max(outputs.data, 1)
+            total += labels.size(0)
+            accuracy += (predicted == labels).sum().item()
 
+    return accuracy / total
 
 # Training function
 def train_model(model, dataloaders, criterion, optimizer, num_epochs=25):
@@ -217,8 +253,8 @@ def run_model():
     return model
 
 # Running everything
-model = run_model()
-video_path = '/app/rundir/CPSC542 - FINALPROJECT/input_video.mp4'
+model = run_optuna_tuning()
+video_path = '/app/rundir/CPSC542-FINALPROJECT/input_video.mp4'
 predicted_label = predict_from_video(video_path, model)
 print(f'Predicted Sign Language Gloss: {predicted_label}')
 
