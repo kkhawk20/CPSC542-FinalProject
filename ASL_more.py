@@ -520,7 +520,7 @@ actual_glosses = [index_to_gloss[label.item()] for label in labels]
 # Visualization
 fig, axes = plt.subplots(figsize=(12, 12))
 
-for i in range(len(preds)):
+for i in range(len(predicted_glosses)):
     img = denormalize(inputs[0][i].cpu())  # inputs[0] because we're assuming all frames belong to the first video
     pred_gloss = predicted_glosses[i]
     actual_gloss = actual_glosses[i]
