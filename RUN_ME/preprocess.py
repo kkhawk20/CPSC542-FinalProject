@@ -17,13 +17,13 @@ from PIL import Image
 from torch.utils.data import random_split
 
 def data_preprocess():
-        
+      
     '''
     Reading in JSON file and creating key for ASL Video dataset
     '''
-    main_path = "/app/rundir/CPSC542-FinalProject/RUN_ME/"
+    main_path = "/app/rundir/CPSC542-FinalProject/archive-3/"
     wlasl_df = pd.read_json(main_path + "WLASL_v0.3.json")
-    print(wlasl_df.head())
+    # print(wlasl_df.head())
 
     # Function to get the video ids from the json file
     def get_videos_ids(json_list):
@@ -47,7 +47,7 @@ def data_preprocess():
         df = pd.DataFrame(list(zip(word, ids)), columns=features_df.columns)
         features_df = pd.concat([features_df, df], ignore_index=True)
 
-    print(features_df.head())
+    # print(features_df.head())
 
     # Creating a function that gets the videos from the dataset of videos
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -68,8 +68,8 @@ def data_preprocess():
     path2ajpgs = sub_folder_jpg
 
     all_vids, all_labels, all_cats = get_vids(path2ajpgs)
-    print(len(all_vids), len(all_labels), len(all_cats))
-    print(all_vids[:5], all_labels[:5], all_cats[:5])
+    # print(len(all_vids), len(all_labels), len(all_cats))
+    # print(all_vids[:5], all_labels[:5], all_cats[:5])
 
     labels_dict = {}
     ind = 0
@@ -80,12 +80,14 @@ def data_preprocess():
     with open('labels_dict.txt', 'w') as file:
         for key in labels_dict.keys():
             file.write(f"{key}: {labels_dict[key]}\n")
-    print("Saved to labels file!")
+    # print("Saved to labels file!")
+
+
 
     num_classes = 2000
     unique_ids = [id_ for id_, label in zip(all_vids, all_labels) if labels_dict[label] < num_classes]
     unique_labels = [label for id_, label in zip(all_vids, all_labels) if labels_dict[label] < num_classes]
-    print(len(unique_ids), len(unique_labels))
+    # print(len(unique_ids), len(unique_labels))
 
     from sklearn.model_selection import StratifiedShuffleSplit
 
@@ -94,19 +96,14 @@ def data_preprocess():
 
     train_ids = [unique_ids[ind] for ind in train_indx]
     train_labels = [unique_labels[ind] for ind in train_indx]
-    print(len(train_ids), len(train_labels)) 
+    # print(len(train_ids), len(train_labels)) 
 
     test_ids = [unique_ids[ind] for ind in test_indx]
     test_labels = [unique_labels[ind] for ind in test_indx]
-    print(len(test_ids), len(test_labels))
-    print(train_ids[:5], train_labels[:5])
+    # print(len(test_ids), len(test_labels))
+    # print(train_ids[:5], train_labels[:5])
 
-    from torch.utils.data import Dataset, DataLoader, Subset
-    import glob
-    from PIL import Image
-    import torch
-    import numpy as np
-    import random
+
     np.random.seed(2020)
     random.seed(2020)
     torch.manual_seed(2020)
@@ -161,9 +158,9 @@ def data_preprocess():
                 ])  
 
     train_ds = VideoDataset(ids= train_ids, labels= train_labels, transform= train_transformer)
-    print(len(train_ds))
+    # print(len(train_ds))
     imgs, label = train_ds[10]
-    imgs.shape, label, torch.min(imgs), torch.max(imgs)
+    # print(imgs.shape, label, torch.min(imgs), torch.max(imgs))
 
 
     test_transformer = transforms.Compose([
@@ -172,8 +169,8 @@ def data_preprocess():
                 transforms.Normalize(mean, std),
                 ]) 
     test_ds = VideoDataset(ids= test_ids, labels= test_labels, transform= test_transformer)
-    print(len(test_ds))
+    # print(len(test_ds))
     imgs, label = test_ds[5]
-    imgs.shape, label, torch.min(imgs), torch.max(imgs)
+    # print(imgs.shape, label, torch.min(imgs), torch.max(imgs))
 
     return train_ds, test_ds
