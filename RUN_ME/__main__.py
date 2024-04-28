@@ -9,13 +9,10 @@ def main():
     print("Running ASL Translation model!l!! ...")
     start_time = time.time()
     # Load the data using the custom SegmentationDataGenerator
-    # train_gen, val_gen, test_gen = load_data()
+    train_ds, test_ds = data_preprocess()
     
-    # # Train the U-Net model with the training and validation generators
-    # model, history = unet(train_gen, val_gen, test_gen)
-    
-    # # Evaluate the model using the test generator and calculate metrics
-    # model_eval(history, model)
+    # Create the model
+    ASL_model()
     
     # For fun, to see how long this thing takes to run :)
     end_time = time.time()

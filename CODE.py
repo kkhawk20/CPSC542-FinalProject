@@ -19,6 +19,7 @@ import glob
 import random
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence
+from sklearn.metrics import accuracy_score
 
 '''
 Reading in JSON file and creating key for ASL Video dataset
@@ -245,12 +246,18 @@ model = CNNLSTM(num_classes=2000).to(device)  # Assuming num_classes is 2000
 criterion = nn.CrossEntropyLoss()  # Assuming a classification task
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
+training_losses = []
+training_accuracies = []
+validation_accuracies = []
+
 print("MODEL BUILT - STARTING TRAINING!")
 num_epochs = 10  # Number of epochs
 for epoch in range(num_epochs):
     print("Training Epoch: ", epoch+1)
     model.train()  # Set model to training mode
     running_loss = 0.0
+    total = 0
+    correct = 0
     for images, labels in train_loader:
         images, labels = images.to(device), labels.to(device)
         
@@ -264,23 +271,47 @@ for epoch in range(num_epochs):
         optimizer.step()
         
         running_loss += loss.item() * images.size(0)
-    
+        _, predicted = torch.max(outputs.data, 1)
+        total += labels.size(0)
+        correct += (predicted == labels).sum().item()
+
     epoch_loss = running_loss / len(train_loader.dataset)
-    print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {epoch_loss:.4f}')
+    epoch_accuracy = 100 * correct / total
+    training_losses.append(epoch_loss)
+    training_accuracies.append(epoch_accuracy)
+    print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {epoch_loss:.4f}, Accuracy: {epoch_accuracy:.2f}%')
 
     # Evaluate the model on the test set
     model.eval()  # Set model to evaluation mode
+    all_predictions = []
+    all_labels = []
     with torch.no_grad():
-        correct = 0
-        total = 0
         for images, labels in test_loader:
             images, labels = images.to(device), labels.to(device)
             outputs = model(images)
             _, predicted = torch.max(outputs.data, 1)
-            total += labels.size(0)
-            correct += (predicted == labels).sum().item()
-        accuracy = 100 * correct / total
-    print(f'Test Accuracy of the model on the test images: {accuracy:.2f}%')
+            all_predictions.extend(predicted.cpu().numpy())
+            all_labels.extend(labels.cpu().numpy())
 
+    validation_accuracy = accuracy_score(all_labels, all_predictions) * 100
+    validation_accuracies.append(validation_accuracy)
+    print(f'Test Accuracy of the model on the test images: {validation_accuracy:.2f}%')
 
+# Plotting the results
+plt.figure(figsize=(12, 5))
+plt.subplot(1, 2, 1)
+plt.plot(training_losses, label='Training Loss')
+plt.title('Loss over Epochs')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.legend()
 
+plt.subplot(1, 2, 2)
+plt.plot(training_accuracies, label='Training Accuracy')
+plt.plot(validation_accuracies, label='Validation Accuracy')
+plt.title('Accuracy over Epochs')
+plt.xlabel('Epochs')
+plt.ylabel('Accuracy')
+plt.legend()
+
+plt.savefig('results.png')
