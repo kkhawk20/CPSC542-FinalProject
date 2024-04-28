@@ -80,6 +80,8 @@ with open('labels_dict.txt', 'w') as file:
         file.write(f"{key}: {labels_dict[key]}\n")
 print("Saved to labels file!")
 
+
+
 num_classes = 2000
 unique_ids = [id_ for id_, label in zip(all_vids, all_labels) if labels_dict[label] < num_classes]
 unique_labels = [label for id_, label in zip(all_vids, all_labels) if labels_dict[label] < num_classes]
@@ -105,6 +107,7 @@ from PIL import Image
 import torch
 import numpy as np
 import random
+
 np.random.seed(2020)
 random.seed(2020)
 torch.manual_seed(2020)
@@ -173,3 +176,23 @@ test_ds = VideoDataset(ids= test_ids, labels= test_labels, transform= test_trans
 print(len(test_ds))
 imgs, label = test_ds[5]
 imgs.shape, label, torch.min(imgs), torch.max(imgs)
+
+def create_dataset_arrays(data_loader):
+    X = []
+    Y = []
+    for imgs, labels in data_loader:
+        X.append(imgs)
+        Y.append(labels)
+    X = torch.cat(X)  # Concatenating list of tensors to a single tensor
+    Y = torch.tensor(Y)
+    return X, Y
+
+# Assuming you have data loaders `train_loader` and `val_loader` set up:
+X_train, Y_train = create_dataset_arrays(train_loader)
+X_val, y_val = create_dataset_arrays(val_loader)
+
+'''
+NOW FOR THE MODEL STUFF!!!!
+'''
+
+
