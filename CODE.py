@@ -52,6 +52,9 @@ for row in wlasl_df.iterrows():
 
 # print(features_df.head())
 
+
+# RUN FROM HERE DOWN IF YOU ARE NOT KELSEY :)
+
 # Creating a function that gets the videos from the dataset of videos
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 def get_vids(path2ajpgs):
@@ -105,7 +108,6 @@ test_ids = [unique_ids[ind] for ind in test_indx]
 test_labels = [unique_labels[ind] for ind in test_indx]
 # print(len(test_ids), len(test_labels))
 # print(train_ids[:5], train_labels[:5])
-
 
 np.random.seed(2020)
 random.seed(2020)
@@ -249,6 +251,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 training_losses = []
 training_accuracies = []
 validation_accuracies = []
+validation_losses = []
 
 print("MODEL BUILT - STARTING TRAINING!")
 num_epochs = 10  # Number of epochs
@@ -292,6 +295,9 @@ for epoch in range(num_epochs):
             _, predicted = torch.max(outputs.data, 1)
             all_predictions.extend(predicted.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())
+
+    validation_loss = criterion(outputs, labels)
+    validation_losses.append(validation_loss)
 
     validation_accuracy = accuracy_score(all_labels, all_predictions) * 100
     validation_accuracies.append(validation_accuracy)
