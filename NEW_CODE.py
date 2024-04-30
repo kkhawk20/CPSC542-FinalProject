@@ -13,6 +13,13 @@ from PIL import Image
 import glob
 import random
 from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping
+import cv2
+import numpy as np
+import tensorflow as tf
+from PIL import Image
+from tensorflow.keras.preprocessing import image as keras_image
+from keras_tuner import HyperModel
+from keras_tuner.tuners import RandomSearch
 
 # TensorFlow does not need manual seed setting for reproducibility in this snippet
 
@@ -134,7 +141,7 @@ if retrain:
     best_model.save('best_model.h5')
     history = best_model.history
 
-    # Plotting training and validation loss
+    # Plot training and validation loss and accuracy
     plt.figure(figsize=(10, 4))
     plt.subplot(1, 2, 1)
     plt.plot(history.history['loss'], label='Training Loss')
@@ -144,7 +151,7 @@ if retrain:
 
     plt.subplot(1, 2, 2)
     plt.plot(history.history['accuracy'], label='Training Accuracy')
-    plt.plot(history.history['val_accuracy'], label = 'Validation Accuracy')
+    plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
     plt.title('Accuracy Over Epochs')
     plt.legend()
     plt.savefig('training_plot.png')
@@ -152,29 +159,18 @@ if retrain:
 from tf_keras_vis.gradcam import Gradcam
 from tf_keras_vis.utils import normalize
 
-def grad_cam(model, image, category_index, layer_name='conv5_block3_out'):
+# Grad-CAM Function
+def apply_grad_cam(model, img_array, category_index, layer_name='conv5_block3_out'):
     gradcam = Gradcam(model, model_modifier=None, clone=False)
-    cam = gradcam(
-        loss=lambda output: output[category_index],
-        seed_input=image,
-        penultimate_layer=-1  # Use the last convolutional layer
-    )
+    cam = gradcam(loss=lambda output: output[category_index], seed_input=img_array, penultimate_layer=-1)
     cam = normalize(cam)
-    return cam
-
-def overlay_grad_cam(img, cam):
-    cam = cv2.resize(cam, (img.shape[1], img.shape[0]))
+    cam = cv2.resize(cam, (img_array.shape[1], img_array.shape[0]))
     heatmap = np.uint8(255 * cam)
     heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-    superimposed_img = heatmap * 0.4 + img
+    superimposed_img = heatmap * 0.4 + img_array
     return superimposed_img
 
 
-import cv2
-import numpy as np
-import tensorflow as tf
-from PIL import Image
-from tensorflow.keras.preprocessing import image as keras_image
 
 model = tf.keras.models.load_model('model.h5')
 
@@ -191,6 +187,10 @@ with open('labels_dict.txt', 'r') as file:
 def predict_and_visualize(video_path, model, bbox_df, output_dir):
     cap = cv2.VideoCapture(video_path)
     frame_count = 0
+
+    gradcam_output_dir = output_dir + "_GRADCAM"
+    if not os.path.exists(gradcam_output_dir):
+        os.makedirs(gradcam_output_dir)
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -219,14 +219,12 @@ def predict_and_visualize(video_path, model, bbox_df, output_dir):
             print(f"Original BBox for video_id {video_id}: {bbox}")
 
             # Calculate the reduced bounding box
-            reduction_ratio = 0.8  # 40% reduction
+            reduction_ratio = 0.8  # Example reduction ratio
             new_width = bbox[2] * reduction_ratio
             new_height = bbox[3] * reduction_ratio
             new_x = bbox[0] + (bbox[2] - new_width) / 2
             new_y = bbox[1] + (bbox[3] - new_height) / 2
             bbox = [int(new_x), int(new_y), int(new_width), int(new_height)]
-
-            print(f"Reduced BBox: {bbox}")
 
             frame_pil = frame_pil.crop((bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3]))
 
@@ -242,6 +240,10 @@ def predict_and_visualize(video_path, model, bbox_df, output_dir):
         predicted_label = np.argmax(prediction, axis=1)
         predicted_label_name = inverse_labels_dict[predicted_label[0]]
         print(f"Predicted label: {predicted_label_name}")
+        
+        grad_cam_img = apply_grad_cam(model, frame_processed[0].astype(np.uint8), 
+                                    predicted_label, 'last_conv_layer_name')
+
 
         # Annotate and save frame
         if bbox:
@@ -251,6 +253,11 @@ def predict_and_visualize(video_path, model, bbox_df, output_dir):
         # Save the frame to a file
         frame_output_path = os.path.join(output_dir, f'frame_{frame_count:04d}.jpg')
         cv2.imwrite(frame_output_path, frame)
+
+        # Save the same frame with gradCAM to a file
+        gradcam_output_path = os.path.join(gradcam_output_dir, f'frame_{frame_count:04d}.jpg')
+        cv2.imwrite(gradcam_output_path, grad_cam_img)
+
         print(f"Frame {frame_count + 1} saved at {frame_output_path}")
         frame_count += 1
 
