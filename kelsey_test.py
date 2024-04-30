@@ -24,6 +24,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torchvision.models import resnet50
 import torch.nn.functional as F
 import torchvision.transforms as transforms
+import cv2
 
 
 '''
@@ -84,7 +85,6 @@ bbox_df.set_index('video_id', inplace=True)
 # RUN FROM HERE DOWN IF YOU ARE NOT KELSEY :)
 
 # Creating a function that gets the videos from the dataset of videos
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 def get_vids(path2ajpgs):
     listOfCats = os.listdir(path2ajpgs)
     ids = []
@@ -261,6 +261,9 @@ model = CNNLSTM(num_classes=2000)
 if torch.cuda.device_count() > 1:
     print(f"Let's use {torch.cuda.device_count()} GPUs!")
     model = nn.DataParallel(model)
+else :
+    print("No GPU available")
+    device = torch.device('cpu')
 model.to(device)
 
 criterion = nn.CrossEntropyLoss() 
@@ -295,7 +298,7 @@ class EarlyStopping:
 
 
 print("MODEL BUILT - STARTING TRAINING!")
-
+'''
 scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=5, verbose=True)
 early_stopping = EarlyStopping(patience=10, verbose=True)
 
@@ -363,8 +366,9 @@ print("Training completed!")
 
 
 '''
-MODEL EVAL
+# MODEL EVAL
 '''
+
 # Plotting the results
 plt.figure(figsize=(12, 5))
 plt.subplot(1, 2, 1)
@@ -384,8 +388,23 @@ plt.ylabel('Accuracy')
 plt.legend()
 
 plt.savefig('results.png')
+'''
 
-import cv2
+# HERE IS WHERE WE DO PREDICTIONS
+# LOADING IN WEIGHTS AND DO THE THING! 
+
+# Mapping each category to an index
+labels_dict = {}
+inverse_labels_dict = {}
+with open('labels_dict.txt', 'r') as file:
+    for line in file:
+        key, value = line.strip().split(': ')
+        value = int(value)
+        labels_dict[key] = value
+        inverse_labels_dict[value] = key
+
+# Creating inverse mapping from index to label
+inverse_labels_dict = {idx: label for label, idx in labels_dict.items()}
 
 def predict_and_visualize(video_path, model, bbox_df, output_dir):
     cap = cv2.VideoCapture(video_path)
@@ -402,54 +421,58 @@ def predict_and_visualize(video_path, model, bbox_df, output_dir):
         # Convert the captured frame to PIL Image and then to Tensor
         frame_pil = Image.fromarray(frame)
         video_id = os.path.basename(video_path).split('.')[0]
+        bbox = None
         
         if video_id in bbox_df.index:
             bbox = bbox_df.loc[video_id]['bbox']
-            frame_pil = frame_pil.crop(bbox)
+            # Reduce the bounding box by a certain percentage
+            reduce_by = 0.2  # Reduce bbox by 20%
+            new_width = bbox[2] * (1 - reduce_by)
+            new_height = bbox[3] * (1 - reduce_by)
+            new_x = max(bbox[0] + (bbox[2] - new_width) / 2, 0)
+            new_y = max(bbox[1] + (bbox[3] - new_height) / 2, 0)
+            bbox = [new_x, new_y, new_width, new_height]
+            frame_pil = frame_pil.crop([int(bbox[0]), int(bbox[1]), int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3])])
 
-        # Transform the frame to tensor
+        # Ensure there is a batch and time dimension
         frame_tensor = transforms.Compose([
             transforms.Resize((h, w)),
             transforms.ToTensor(),
             transforms.Normalize(mean, std)
-        ])(frame_pil).unsqueeze(0).to(device)
+        ])(frame_pil).unsqueeze(0)  # Add a batch dimension
+
+        # Ensure there is a time dimension for LSTM
+        if frame_tensor.dim() == 4:
+            frame_tensor = frame_tensor.unsqueeze(0)  # Add a time dimension
 
         # Make prediction
         with torch.no_grad():
             outputs = model(frame_tensor)
             _, predicted = torch.max(outputs, 1)
-            predicted_label_name = labels_dict.inverse_transform([predicted.item()])[0]
+            predicted_label_name = inverse_labels_dict[predicted.item()]
 
         # Draw the bounding box and label on the frame
         if bbox:
-            start_point = (bbox[0], bbox[1])
-            end_point = (bbox[0] + bbox[2], bbox[1] + bbox[3])
-            color = (0, 255, 0)  # Green color
+            start_point = (int(bbox[0]), int(bbox[1]))
+            end_point = (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3]))
+            color = (0, 255, 0)
             thickness = 2
             frame = cv2.rectangle(frame, start_point, end_point, color, thickness)
             font = cv2.FONT_HERSHEY_SIMPLEX
-            cv2.putText(frame, predicted_label_name, (bbox[0], bbox[1] - 10), font, 0.9, color, thickness)
+            cv2.putText(frame, predicted_label_name, (int(bbox[0]), int(bbox[1] - 10)), font, 0.9, color, thickness)
 
         # Save the frame to a file
         frame_output_path = os.path.join(output_dir, f'frame_{frame_count:04d}.jpg')
-        cv2.imwrite(frame_output_path, frame)
+        cv2.imwrite(frame_output_path, cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))  # Ensure the color conversion if needed
         frame_count += 1
 
     cap.release()
     cv2.destroyAllWindows()
     print("Video processing completed. Frames saved to:", output_dir)
 
-labels_dict = {}
-inverse_labels_dict = {}
-ind = 0
-for label in all_cats:
-    labels_dict[label] = ind
-    inverse_labels_dict[ind] = label  # Create the inverse mapping here
-    ind += 1
-
-model.load_state_dict(torch.load('model.pth'))
+# Reload and evaluate the model
+model.load_state_dict(torch.load('./model.pth'))
 model.eval()  # Set the model to evaluation mode
-video_path = './input_video.mp4'
-output_dir = './output_frames'
+video_path = './videos/across/00832.mp4'
+output_dir = './output_frames_across_test'
 predict_and_visualize(video_path, model, bbox_df, output_dir)
-print("Prediction and visualization completed!")
