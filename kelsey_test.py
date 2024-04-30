@@ -304,7 +304,7 @@ training_accuracies = []
 validation_accuracies = []
 validation_losses = []
 
-num_epochs = 100  # Number of epochs
+num_epochs = 1000  # Number of epochs
 for epoch in range(num_epochs):
     print("Training Epoch: ", epoch+1)
     model.train()
