@@ -178,7 +178,6 @@ test_ds = VideoDataset(ids= test_ids, labels= test_labels, transform= test_trans
 imgs, label = test_ds[5]
 # print(imgs.shape, label, torch.min(imgs), torch.max(imgs))
 
-
 '''
 NOW FOR THE MODEL STUFF!!!!
 '''
@@ -321,3 +320,8 @@ plt.ylabel('Accuracy')
 plt.legend()
 
 plt.savefig('results.png')
+
+# Save the model
+torch.save(model.state_dict(), 'model.pth')
+print("Model saved to model.pth")
+
