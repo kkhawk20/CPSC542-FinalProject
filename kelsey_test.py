@@ -361,6 +361,10 @@ torch.save(model.state_dict(), 'model.pth')
 print("Model saved to model.pth")
 print("Training completed!")
 
+
+'''
+MODEL EVAL
+'''
 # Plotting the results
 plt.figure(figsize=(12, 5))
 plt.subplot(1, 2, 1)
@@ -383,29 +387,33 @@ plt.savefig('results.png')
 
 import cv2
 
-def predict_and_visualize(video_path, model, bbox_df):
+def predict_and_visualize(video_path, model, bbox_df, output_dir):
     cap = cv2.VideoCapture(video_path)
+    frame_count = 0
+
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
-        
+
         # Convert the captured frame to PIL Image and then to Tensor
         frame_pil = Image.fromarray(frame)
-        # Assume the bounding box data is available in bbox_df for this frame
         video_id = os.path.basename(video_path).split('.')[0]
+        
         if video_id in bbox_df.index:
             bbox = bbox_df.loc[video_id]['bbox']
-            # Crop and transform the frame using the bounding box
             frame_pil = frame_pil.crop(bbox)
-        
+
         # Transform the frame to tensor
         frame_tensor = transforms.Compose([
             transforms.Resize((h, w)),
             transforms.ToTensor(),
             transforms.Normalize(mean, std)
         ])(frame_pil).unsqueeze(0).to(device)
-        
+
         # Make prediction
         with torch.no_grad():
             outputs = model(frame_tensor)
@@ -416,21 +424,32 @@ def predict_and_visualize(video_path, model, bbox_df):
         if bbox:
             start_point = (bbox[0], bbox[1])
             end_point = (bbox[0] + bbox[2], bbox[1] + bbox[3])
-            color = (0, 255, 0) # Green color
+            color = (0, 255, 0)  # Green color
             thickness = 2
             frame = cv2.rectangle(frame, start_point, end_point, color, thickness)
             font = cv2.FONT_HERSHEY_SIMPLEX
             cv2.putText(frame, predicted_label_name, (bbox[0], bbox[1] - 10), font, 0.9, color, thickness)
-        
-        # Display the frame
-        cv2.imshow('Video', frame)
-        if cv2.waitKey(25) & 0xFF == ord('q'):
-            break
+
+        # Save the frame to a file
+        frame_output_path = os.path.join(output_dir, f'frame_{frame_count:04d}.jpg')
+        cv2.imwrite(frame_output_path, frame)
+        frame_count += 1
 
     cap.release()
     cv2.destroyAllWindows()
+    print("Video processing completed. Frames saved to:", output_dir)
+
+labels_dict = {}
+inverse_labels_dict = {}
+ind = 0
+for label in all_cats:
+    labels_dict[label] = ind
+    inverse_labels_dict[ind] = label  # Create the inverse mapping here
+    ind += 1
 
 model.load_state_dict(torch.load('model.pth'))
 model.eval()  # Set the model to evaluation mode
-predict_and_visualize('./input_video.mp4', model, bbox_df)
+video_path = './input_video.mp4'
+output_dir = './output_frames'
+predict_and_visualize(video_path, model, bbox_df, output_dir)
 print("Prediction and visualization completed!")
