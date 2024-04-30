@@ -253,8 +253,8 @@ def my_collate(batch):
     return frames_padded, labels
 
 # Use custom collate function in DataLoader
-train_loader = DataLoader(train_ds, batch_size=4, shuffle=True, collate_fn=my_collate, num_workers=4)
-test_loader = DataLoader(test_ds, batch_size=16, shuffle=False, num_workers=4, collate_fn=my_collate)
+train_loader = DataLoader(train_ds, batch_size=16, shuffle=True, collate_fn=my_collate, num_workers=8)
+test_loader = DataLoader(test_ds, batch_size=16, shuffle=False, num_workers=8, collate_fn=my_collate)
 
 # Setting the GPU utilization ;)
 model = CNNLSTM(num_classes=2000)
