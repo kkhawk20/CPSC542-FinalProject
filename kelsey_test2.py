@@ -94,29 +94,124 @@ val_generator = val_datagen.flow_from_directory(
 reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=10)
 early_stopping = EarlyStopping(monitor='val_loss', patience=15, restore_best_weights=True)
 
-history = model.fit(
-    train_generator,
-    steps_per_epoch=100,  # Number of steps per epoch
-    epochs=50,
-    validation_data=val_generator,
-    validation_steps=50,
-    callbacks=[reduce_lr, early_stopping]
-)
+retrain = False
+if retrain:
+    history = model.fit(
+        train_generator,
+        epochs=500,
+        validation_data=val_generator,
+        validation_steps=50,
+        callbacks=[reduce_lr, early_stopping]
+    )
 
-# Save the model
-model.save('model.h5')
+    # Save the model
+    model.save('model.h5')
 
-# Plotting training and validation loss
-plt.figure(figsize=(10, 4))
-plt.subplot(1, 2, 1)
-plt.plot(history.history['loss'], label='Training Loss')
-plt.plot(history.history['val_loss'], label='Validation Loss')
-plt.title('Loss Over Epochs')
-plt.legend()
+    # Plotting training and validation loss
+    plt.figure(figsize=(10, 4))
+    plt.subplot(1, 2, 1)
+    plt.plot(history.history['loss'], label='Training Loss')
+    plt.plot(history.history['val_loss'], label='Validation Loss')
+    plt.title('Loss Over Epochs')
+    plt.legend()
 
-plt.subplot(1, 2, 2)
-plt.plot(history.history['accuracy'], label='Training Accuracy')
-plt.plot(history.history['val_accuracy'], label = 'Validation Accuracy')
-plt.title('Accuracy Over Epochs')
-plt.legend()
-plt.savefig('training_plot.png')
+    plt.subplot(1, 2, 2)
+    plt.plot(history.history['accuracy'], label='Training Accuracy')
+    plt.plot(history.history['val_accuracy'], label = 'Validation Accuracy')
+    plt.title('Accuracy Over Epochs')
+    plt.legend()
+    plt.savefig('training_plot.png')
+
+
+import cv2
+import numpy as np
+import tensorflow as tf
+from PIL import Image
+from tensorflow.keras.preprocessing import image as keras_image
+
+model = tf.keras.models.load_model('model.h5')
+
+# Mapping labels from label dictionary file
+labels_dict = {}
+inverse_labels_dict = {}
+with open('labels_dict.txt', 'r') as file:
+    for line in file:
+        key, value = line.strip().split(': ')
+        value = int(value)
+        labels_dict[key] = value
+        inverse_labels_dict[value] = key
+
+def predict_and_visualize(video_path, model, bbox_df, output_dir):
+    cap = cv2.VideoCapture(video_path)
+    frame_count = 0
+
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    if not cap.isOpened():
+        print("Error: Cannot open video file.")
+        return
+
+    print("Video successfully opened.")
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            print("No more frames to read or error in fetching frame.")
+            break
+
+        print(f"Processing frame {frame_count + 1}")
+
+        # Convert frame to PIL Image
+        frame_pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        video_id = os.path.basename(video_path).split('.')[0]
+        bbox = None
+        
+        if video_id in bbox_df.index and bbox_df.loc[video_id]['bbox'] is not None:
+            bbox = bbox_df.loc[video_id]['bbox']
+            print(f"Original BBox for video_id {video_id}: {bbox}")
+
+            # Calculate the reduced bounding box
+            reduction_ratio = 0.8  # 40% reduction
+            new_width = bbox[2] * reduction_ratio
+            new_height = bbox[3] * reduction_ratio
+            new_x = bbox[0] + (bbox[2] - new_width) / 2
+            new_y = bbox[1] + (bbox[3] - new_height) / 2
+            bbox = [int(new_x), int(new_y), int(new_width), int(new_height)]
+
+            print(f"Reduced BBox: {bbox}")
+
+            frame_pil = frame_pil.crop((bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3]))
+
+        # Process image for the model
+        frame_processed = keras_image.img_to_array(frame_pil)
+        frame_processed = tf.image.resize(frame_processed, [256, 256])
+        frame_processed = np.expand_dims(frame_processed, axis=0)  # Add batch dimension
+        frame_processed = np.copy(frame_processed)  # Ensure the array is writable
+        frame_processed /= 255.0  # Normalize to [0,1]
+
+        # Predict using the model
+        prediction = model.predict(frame_processed)
+        predicted_label = np.argmax(prediction, axis=1)
+        predicted_label_name = inverse_labels_dict[predicted_label[0]]
+        print(f"Predicted label: {predicted_label_name}")
+
+        # Annotate and save frame
+        if bbox:
+            cv2.rectangle(frame, (int(bbox[0]), int(bbox[1])), (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3])), (0, 255, 0), 2)
+            cv2.putText(frame, predicted_label_name, (int(bbox[0]), int(bbox[1] - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+
+        # Save the frame to a file
+        frame_output_path = os.path.join(output_dir, f'frame_{frame_count:04d}.jpg')
+        cv2.imwrite(frame_output_path, frame)
+        print(f"Frame {frame_count + 1} saved at {frame_output_path}")
+        frame_count += 1
+
+    cap.release()
+    cv2.destroyAllWindows()
+    print("Video processing completed. Frames saved to:", output_dir)
+
+# Ensure the video path and output directory are correctly specified
+video_path = './videos/a/01610.mp4'  # Make sure the file extension is specified if needed
+output_dir = './output_frames_a_test'
+predict_and_visualize(video_path, model, bbox_df, output_dir)
