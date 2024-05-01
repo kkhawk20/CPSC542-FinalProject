@@ -20,6 +20,8 @@ from PIL import Image
 from tensorflow.keras.preprocessing import image as keras_image
 from keras_tuner import HyperModel
 from keras_tuner.tuners import RandomSearch
+from tf_keras_vis.utils.model_modifiers import ReplaceToLinear
+import matplotlib.cm as cm
 
 # TensorFlow does not need manual seed setting for reproducibility in this snippet
 
@@ -140,6 +142,7 @@ if retrain:
     best_model = tuner.get_best_models(num_models=1)[0]
     best_model.save('best_model.h5')
     history = best_model.history
+    print(best_model.summary())
 
     # Plot training and validation loss and accuracy
     plt.figure(figsize=(10, 4))
@@ -160,19 +163,36 @@ from tf_keras_vis.gradcam import Gradcam
 from tf_keras_vis.utils import normalize
 
 # Grad-CAM Function
-def apply_grad_cam(model, img_array, category_index, layer_name='conv5_block3_out'):
-    gradcam = Gradcam(model, model_modifier=None, clone=False)
-    cam = gradcam(loss=lambda output: output[category_index], seed_input=img_array, penultimate_layer=-1)
+def apply_grad_cam(model, img_array, category_index, layer_name):
+    # Ensure image is float32, normalized (as expected by most models)
+    if img_array.dtype != np.float32:
+        img_array = img_array.astype('float32') / 255.0
+    gradcam = Gradcam(model,
+                    model_modifier=ReplaceToLinear(),
+                    clone=True)
+    def score_function(output):
+        return output[:, category_index]
+    cam = gradcam(score_function, 
+                  seed_input=img_array,
+                  penultimate_layer=layer_name)  # Use the name of the last convolutional layer
     cam = normalize(cam)
-    cam = cv2.resize(cam, (img_array.shape[1], img_array.shape[0]))
-    heatmap = np.uint8(255 * cam)
+    heatmap = np.uint8(255 * cam[0])
     heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-    superimposed_img = heatmap * 0.4 + img_array
-    return superimposed_img
 
+    img_with_heatmap = cv2.addWeighted(img_array[0].astype('uint8'), 0.5, heatmap, 0.5, 0)
 
+    return img_with_heatmap
+
+# Ensure you preprocess your images correctly before applying Grad-CAM
+def preprocess_image_for_gradcam(img, size=(256, 256)):
+    img = img.resize(size, Image.ANTIALIAS)
+    img_array = keras_image.img_to_array(img)
+    img_array = np.expand_dims(img_array, axis=0)
+    img_array /= 255.0
+    return img_array
 
 model = tf.keras.models.load_model('model.h5')
+print(model.summary())
 
 # Mapping labels from label dictionary file
 labels_dict = {}
@@ -229,21 +249,16 @@ def predict_and_visualize(video_path, model, bbox_df, output_dir):
             frame_pil = frame_pil.crop((bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3]))
 
         # Process image for the model
-        frame_processed = keras_image.img_to_array(frame_pil)
-        frame_processed = tf.image.resize(frame_processed, [256, 256])
-        frame_processed = np.expand_dims(frame_processed, axis=0)  # Add batch dimension
-        frame_processed = np.copy(frame_processed)  # Ensure the array is writable
-        frame_processed /= 255.0  # Normalize to [0,1]
+        frame_processed = preprocess_image_for_gradcam(frame_pil)
 
         # Predict using the model
         prediction = model.predict(frame_processed)
         predicted_label = np.argmax(prediction, axis=1)
         predicted_label_name = inverse_labels_dict[predicted_label[0]]
         print(f"Predicted label: {predicted_label_name}")
-        
-        grad_cam_img = apply_grad_cam(model, frame_processed[0].astype(np.uint8), 
-                                    predicted_label, 'last_conv_layer_name')
 
+        layer_name_for_gradcam = 'conv5_block3_3_conv'
+        grad_cam_img = apply_grad_cam(model, frame_processed, predicted_label[0], layer_name_for_gradcam)
 
         # Annotate and save frame
         if bbox:
