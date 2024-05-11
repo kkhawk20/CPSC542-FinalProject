@@ -192,7 +192,12 @@ def preprocess_image_for_gradcam(img, size=(256, 256)):
     return img_array
 
 model = tf.keras.models.load_model('model.h5')
-print(model.summary())
+
+# Saving the model architecture to a file
+with open('model_summary.txt', 'w') as file:
+    model.summary(print_fn=lambda x: file.write(x + '\n'))
+
+# print(model.summary())
 
 # Mapping labels from label dictionary file
 labels_dict = {}
