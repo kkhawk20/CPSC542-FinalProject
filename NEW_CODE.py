@@ -282,8 +282,7 @@ def predict_and_visualize(video_path, model, bbox_df, output_dir):
     cv2.destroyAllWindows()
     print("Video processing completed. Frames saved to:", output_dir)
 
-# Ensure the video path and output directory are correctly specified
-video_path = './videos/grow/25846.mp4' 
-output_dir = './output_frames_grow_test'
+video_path = './videos/audiology/04137.mp4' 
+output_dir = './output_frames_audiology_test'
 predict_and_visualize(video_path, model, bbox_df, output_dir)
 
