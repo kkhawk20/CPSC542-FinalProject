@@ -22,8 +22,10 @@ from keras_tuner import HyperModel
 from keras_tuner.tuners import RandomSearch
 from tf_keras_vis.utils.model_modifiers import ReplaceToLinear
 import matplotlib.cm as cm
-
-# TensorFlow does not need manual seed setting for reproducibility in this snippet
+from keras_tuner import HyperModel
+from keras_tuner.tuners import RandomSearch
+from tf_keras_vis.gradcam import Gradcam
+from tf_keras_vis.utils import normalize
 
 '''
 Reading in JSON file and creating key for ASL Video dataset
@@ -63,10 +65,6 @@ def apply_bbox(image, video_id):
         bbox = bbox_df.loc[video_id]['bbox']
         image = tf.image.crop_to_bounding_box(image, bbox[1], bbox[0], bbox[3], bbox[2])
     return image
-
-# Define the CNN-LSTM model
-from kerastuner import HyperModel
-from kerastuner.tuners import RandomSearch
 
 class CNNLSTMHyperModel(HyperModel):
     def __init__(self, input_shape, num_classes):
@@ -159,8 +157,7 @@ if retrain:
     plt.legend()
     plt.savefig('training_plot.png')
 
-from tf_keras_vis.gradcam import Gradcam
-from tf_keras_vis.utils import normalize
+
 
 # Grad-CAM Function
 def apply_grad_cam(model, img_array, category_index, layer_name):
@@ -286,6 +283,7 @@ def predict_and_visualize(video_path, model, bbox_df, output_dir):
     print("Video processing completed. Frames saved to:", output_dir)
 
 # Ensure the video path and output directory are correctly specified
-video_path = './videos/a/01610.mp4'  # Make sure the file extension is specified if needed
-output_dir = './output_frames_a_test'
+video_path = './videos/grow/25846.mp4' 
+output_dir = './output_frames_grow_test'
 predict_and_visualize(video_path, model, bbox_df, output_dir)
+
