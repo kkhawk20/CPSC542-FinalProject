@@ -157,8 +157,6 @@ if retrain:
     plt.legend()
     plt.savefig('training_plot.png')
 
-
-
 # Grad-CAM Function
 def apply_grad_cam(model, img_array, category_index, layer_name):
     # Ensure image is float32, normalized (as expected by most models)

@@ -17,160 +17,75 @@ from PIL import Image
 from torch.utils.data import random_split
 
 def data_preprocess():
-      
+        
     '''
     Reading in JSON file and creating key for ASL Video dataset
     '''
     main_path = "/app/rundir/CPSC542-FinalProject/archive-3/"
     wlasl_df = pd.read_json(main_path + "WLASL_v0.3.json")
-    # print(wlasl_df.head())
 
-    # Function to get the video ids from the json file
-    def get_videos_ids(json_list):
-        video_ids = []
-        for ins in json_list:
-            if 'video_id' in ins:
-                video_id = ins['video_id']
-                if os.path.exists(f'{main_path}videos_raw/{video_id}.mp4'):
-                    video_ids.append(video_id)
-        return video_ids
+    # Reading in the JSON file
+    with open(main_path + 'WLASL_v0.3.json', 'r') as data_file:
+        json_data = json.load(data_file)
 
-    with open(main_path+'WLASL_v0.3.json', 'r') as data_file:
-        json_data = data_file.read()
-    instance_json = json.loads(json_data)
+    bbox_data = []
+    for entry in json_data:
+        gloss = entry['gloss']
+        for instance in entry['instances']:
+            video_id = instance['video_id']
+            bbox = instance['bbox'] if 'bbox' in instance else None
+            bbox_data.append({
+                'video_id': video_id,
+                'gloss': gloss,
+                'bbox': bbox,
+            })
 
-    # Creating a dataframe to store the features from the key file
-    features_df = pd.DataFrame(columns=['gloss', 'video_id'])
-    for row in wlasl_df.iterrows():
-        ids = get_videos_ids(row[1][1])
-        word = [row[1][0]] * len(ids)
-        df = pd.DataFrame(list(zip(word, ids)), columns=features_df.columns)
-        features_df = pd.concat([features_df, df], ignore_index=True)
+    bbox_df = pd.DataFrame(bbox_data)
+    bbox_df.set_index('video_id', inplace=True)
 
-    # print(features_df.head())
+    # Helper function to load images
+    def load_and_preprocess_image(path):
+        image = tf.io.read_file(path)
+        image = tf.image.decode_jpeg(image, channels=3)
+        image = tf.image.resize(image, [256, 256])
+        return image
 
-    # Creating a function that gets the videos from the dataset of videos
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    def get_vids(path2ajpgs):
-        listOfCats = os.listdir(path2ajpgs)
-        ids = []
-        labels = []
-        for catg in listOfCats:
-            path2catg = os.path.join(path2ajpgs, catg)
-            listOfSubCats = os.listdir(path2catg)
-            path2subCats= [os.path.join(path2catg,los) for los in listOfSubCats]
-            ids.extend(path2subCats)
-            labels.extend([catg]*len(listOfSubCats))
-        return ids, labels, listOfCats 
+    # Helper function to apply bounding box cropping
+    def apply_bbox(image, video_id):
+        if video_id in bbox_df.index and bbox_df.loc[video_id]['bbox'] is not None:
+            bbox = bbox_df.loc[video_id]['bbox']
+            image = tf.image.crop_to_bounding_box(image, bbox[1], bbox[0], bbox[3], bbox[2])
+        return image
+   
+    tuner = RandomSearch(
+        hypermodel,
+        objective='val_accuracy',
+        max_trials=10,
+        executions_per_trial=2,
+        directory='keras_tuner_dir',
+        project_name='cnn_lstm_tuning'
+    )
 
-    # Creating a dictionary to hold all 2000 labels and indexes for references
-    sub_folder_jpg = 'images'
-    path2ajpgs = sub_folder_jpg
+    # Training and validation
+    train_datagen = ImageDataGenerator(
+        rescale=1./255,
+        horizontal_flip=True,
+        brightness_range=[0.8, 1.2],  # Adjust brightness
+        channel_shift_range=150.0  # Adjust color channels
+    )
+    val_datagen = ImageDataGenerator(rescale=1./255)
 
-    all_vids, all_labels, all_cats = get_vids(path2ajpgs)
-    # print(len(all_vids), len(all_labels), len(all_cats))
-    # print(all_vids[:5], all_labels[:5], all_cats[:5])
+    # Assuming `train_ds` and `val_ds` are defined somewhere above as datasets
+    train_generator = train_datagen.flow_from_directory(
+        directory='/app/rundir/CPSC542-FinalProject/images/',
+        target_size=(256, 256),
+        batch_size=32,
+        class_mode='binary')
 
-    labels_dict = {}
-    ind = 0
-    for label in all_cats:
-        labels_dict[label] = ind
-        ind += 1
+    val_generator = val_datagen.flow_from_directory(
+        directory='/app/rundir/CPSC542-FinalProject/images/',
+        target_size=(256, 256),
+        batch_size=32,
+        class_mode='binary')
 
-    with open('labels_dict.txt', 'w') as file:
-        for key in labels_dict.keys():
-            file.write(f"{key}: {labels_dict[key]}\n")
-    # print("Saved to labels file!")
-
-
-
-    num_classes = 2000
-    unique_ids = [id_ for id_, label in zip(all_vids, all_labels) if labels_dict[label] < num_classes]
-    unique_labels = [label for id_, label in zip(all_vids, all_labels) if labels_dict[label] < num_classes]
-    # print(len(unique_ids), len(unique_labels))
-
-    from sklearn.model_selection import StratifiedShuffleSplit
-
-    sss = StratifiedShuffleSplit(n_splits=2, test_size=0.2, random_state=0)
-    train_indx, test_indx = next(sss.split(unique_ids, unique_labels))
-
-    train_ids = [unique_ids[ind] for ind in train_indx]
-    train_labels = [unique_labels[ind] for ind in train_indx]
-    # print(len(train_ids), len(train_labels)) 
-
-    test_ids = [unique_ids[ind] for ind in test_indx]
-    test_labels = [unique_labels[ind] for ind in test_indx]
-    # print(len(test_ids), len(test_labels))
-    # print(train_ids[:5], train_labels[:5])
-
-
-    np.random.seed(2020)
-    random.seed(2020)
-    torch.manual_seed(2020)
-
-    class VideoDataset(Dataset):
-        def __init__(self, ids, labels, transform):      
-            self.transform = transform
-            self.ids = ids
-            self.labels = labels
-        def __len__(self):
-            return len(self.ids)
-        def __getitem__(self, idx):
-            path2imgs=glob.glob(self.ids[idx]+"/*.jpg")
-            path2imgs = path2imgs[:timesteps]
-            label = labels_dict[self.labels[idx]]
-            frames = []
-            for p2i in path2imgs:
-                frame = Image.open(p2i)
-                frames.append(frame)
-            
-            seed = np.random.randint(1e9)        
-            frames_tr = []
-            for frame in frames:
-                random.seed(seed)
-                np.random.seed(seed)
-                frame = self.transform(frame)
-                frames_tr.append(frame)
-            if len(frames_tr)>0:
-                frames_tr = torch.stack(frames_tr)
-            return frames_tr, label
-
-    model_type = "rnn"    
-
-    timesteps =16
-    if model_type == "rnn":
-        h, w =224, 224
-        mean = [0.485, 0.456, 0.406]
-        std = [0.229, 0.224, 0.225]
-    else:
-        h, w = 112, 112
-        mean = [0.43216, 0.394666, 0.37645]
-        std = [0.22803, 0.22145, 0.216989]
-
-    import torchvision.transforms as transforms
-
-    train_transformer = transforms.Compose([
-                transforms.Resize((h,w)),
-                transforms.RandomHorizontalFlip(p=0.5),  
-                transforms.RandomAffine(degrees=0, translate=(0.1,0.1)),    
-                transforms.ToTensor(),
-                transforms.Normalize(mean, std),
-                ])  
-
-    train_ds = VideoDataset(ids= train_ids, labels= train_labels, transform= train_transformer)
-    # print(len(train_ds))
-    imgs, label = train_ds[10]
-    # print(imgs.shape, label, torch.min(imgs), torch.max(imgs))
-
-
-    test_transformer = transforms.Compose([
-                transforms.Resize((h,w)),
-                transforms.ToTensor(),
-                transforms.Normalize(mean, std),
-                ]) 
-    test_ds = VideoDataset(ids= test_ids, labels= test_labels, transform= test_transformer)
-    # print(len(test_ds))
-    imgs, label = test_ds[5]
-    # print(imgs.shape, label, torch.min(imgs), torch.max(imgs))
-
-    return train_ds, test_ds
+    return train_generator, val_generator, tuner
