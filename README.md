@@ -1,12 +1,25 @@
 # ASL Translation - Deep CNN, Object Detection/Image Segmentation
 
 ### Group: 
-* Kelsey Hawkins&emsp;|&emsp;kehawkins@chapman.edu&emsp;| 2364453
-* Sarah Fieck&emsp;|&emsp;fieck@chapman.edu&emsp;|&emsp;2374389
-* Alejandro Rea&emsp;|&emsp;area@chapman.edu&emsp;|&emsp;2378582
-* Chris Ton-That&emsp;|&emsp;tonthat@chapman.edu&emsp;|&emsp;2371950
-* Benjamin Trenery&emsp;|&emsp;trenery@chapman.edu&emsp;&emsp;2354938
+* Kelsey Hawkins
+* Sarah Fieck
+* Alejandro Rea
+* Chris Ton-That
+* Benjamin Trenery
 
+### Group Emails:
+* kehawkins@chapman.edu
+* fieck@chapman.edu
+* area@chapman.edu
+* tonthat@chapman.edu
+* trenery@chapman.edu
+
+### Group ID's:
+* 2364453
+* 2374389
+* 2378582
+* 2371950
+* 2354938
 
 ### Resources: 
 * [WLASL Kaggle Dataset](https://www.kaggle.com/datasets/risangbaskoro/wlasl-processed/data)
