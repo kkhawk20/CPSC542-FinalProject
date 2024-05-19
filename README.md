@@ -5,7 +5,7 @@
 * Sarah Fieck      | fieck@chapman.edu;    | 2374389
 * Alejandro Rea    | area@chapman.edu;     | 2378582
 * Chris Ton-That   | tonthat@chapman.edu;  | 2371950
-* Benjamin Trenery | trenery@chapman.edu; | 2354938
+* Benjamin Trenery | trenery@chapman.edu;  | 2354938
 
 
 ### Resources: 
