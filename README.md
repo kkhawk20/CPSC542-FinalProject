@@ -1,11 +1,11 @@
 # ASL Translation - Deep CNN, Object Detection/Image Segmentation
 
 ### Group: 
-* Kelsey Hawkins   | kehawkins@chapman.edu | 2364453
-* Sarah Fieck      | fieck@chapman.edu;    | 2374389
-* Alejandro Rea    | area@chapman.edu;     | 2378582
-* Chris Ton-That   | tonthat@chapman.edu;  | 2371950
-* Benjamin Trenery | trenery@chapman.edu;  | 2354938
+* Kelsey Hawkins&emsp;|&emsp;kehawkins@chapman.edu&emsp;| 2364453
+* Sarah Fieck&emsp;|&emsp;fieck@chapman.edu&emsp;|&emsp;2374389
+* Alejandro Rea&emsp;|&emsp;area@chapman.edu&emsp;|&emsp;2378582
+* Chris Ton-That&emsp;|&emsp;tonthat@chapman.edu&emsp;|&emsp;2371950
+* Benjamin Trenery&emsp;|&emsp;trenery@chapman.edu&emsp;&emsp;2354938
 
 
 ### Resources: 
